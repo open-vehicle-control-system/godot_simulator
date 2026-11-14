@@ -1,0 +1,26 @@
+// A tree impostor: views of a tree around its trunk, side by side in an atlas, on crossed
+// cards. The instance colour tints the tree.
+shader_type spatial;
+render_mode cull_disabled, depth_draw_opaque;
+
+uniform sampler2D atlas : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
+
+varying vec3 tint;
+
+void vertex() {
+	tint = COLOR.rgb;
+}
+
+void fragment() {
+	vec4 colour = texture(atlas, UV);
+	ALBEDO = colour.rgb * tint;
+	ALPHA = colour.a;
+	ALPHA_SCISSOR_THRESHOLD = 0.45;
+	ALPHA_ANTIALIASING_EDGE = 0.3;
+	ALPHA_TEXTURE_COORDINATE = UV * vec2(textureSize(atlas, 0));
+	ROUGHNESS = 1.0;
+	SPECULAR = 0.1;
+	// Cards lit as a crown is: from above, and with the light that passes through the leaves.
+	NORMAL = normalize(mix(NORMAL, (VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz, 0.55));
+	BACKLIGHT = vec3(0.25, 0.3, 0.2);
+}

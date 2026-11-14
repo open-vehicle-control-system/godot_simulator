@@ -1,0 +1,25 @@
+[tools]
+godot = "4.6.3"
+python = "3.12"
+"pipx:gdtoolkit" = "4.5.0"
+ruff = "0.17.5"
+
+[env]
+# The Godot 4.6 binary the scripts run; mise puts its own on the PATH.
+GODOT = "{{ env.GODOT | default(value='godot') }}"
+
+[tasks.test]
+description = "Run the simulator's tests headless, and the tools' tests"
+run = ["./simulator/tests/run_tests.sh", "python3 -m unittest discover -s tools/tests"]
+
+[tasks.format]
+description = "Format GDScript and Python"
+run = ["gdformat simulator", "ruff format tools"]
+
+[tasks.lint]
+description = "Check formatting and lint GDScript and Python"
+run = ["gdformat --check simulator", "gdlint simulator", "ruff format --check tools", "ruff check tools"]
+
+[tasks.check]
+description = "Everything a change passes before review"
+depends = ["lint", "test"]

@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+simulator/.godot/
+*.import
+/build/
+# Generated pack payloads: a pack directory keeps only its manifest, licence and recipe.
+packs/**/*.glb
+packs/**/*.png
+packs/**/*.jpg
+packs/**/*.height
+packs/**/*.hdr
+!simulator/tests/packs/**
+.claude/*
+!.claude/settings.json
+!.claude/skills/

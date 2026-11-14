@@ -1,0 +1,22 @@
+; Engine configuration file (Godot 4)
+config_version=5
+
+[application]
+config/name="OVCS Godot simulator"
+config/description="Shows a vehicle OVCS drives over the simulator link and senses its world."
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.6")
+
+[display]
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/mode="canvas_items"
+
+[physics]
+common/physics_ticks_per_second=60
+
+[rendering]
+anti_aliasing/quality/msaa_3d=2
+textures/default_filters/anisotropic_filtering_level=4
+lights_and_shadows/directional_shadow/size=8192
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
