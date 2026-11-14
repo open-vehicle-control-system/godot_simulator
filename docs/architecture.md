@@ -89,8 +89,11 @@ weight transfer and no suspension dynamics: a vehicle moved by its own forces is
 
 The vehicle does not pass through what it hits. Before every move its body box (raised off the
 ground so kerbs never reach it) is swept along the move; if the track's collision is in
-the way (walls, barriers, buildings, tree trunks, sign posts) it goes as far as is clear and stops there,
-speed zero, odometer stopped, which is what OVCS then reads. The ground is on a physics layer
+the way (walls, barriers, buildings, tree trunks, sign posts) it goes as far as is clear, then
+slides along the obstacle with the part of the rest of its move that runs along it, keeping
+that share of its speed: a scrape keeps most of it, a head-on hit stops it, odometer and speed
+as OVCS then reads them. Steering always turns the vehicle, so it can turn away from what it
+touches. The ground is on a physics layer
 of its own (`CollisionLayers`) that the wheels' rays see and the sweep does not, so a crest or a
 bank reaching the box never stops it. A sweep ignores what the box is already into, so that is
 asked first: a body into an obstacle moves freely away from it, to back off or turn away, and

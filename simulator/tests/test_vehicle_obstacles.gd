@@ -162,3 +162,53 @@ func _vehicle_in(directory: String, track_id: String) -> Vehicle:
 	vehicle.setup(spec, VehicleModel.build(spec)["model"])
 	await wait_physics_frames(1)
 	return vehicle
+
+
+func test_slides_along_a_wall_it_scrapes_and_steers_away_from_it() -> void:
+	var vehicle := await _vehicle_on_flat_ground("scrape")
+	var wall := _wall_along_z(3.0)
+	vehicle.get_parent().add_child(wall)
+	# Heading 20 degrees towards the wall on its left (+X).
+	vehicle.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(20.0)), Vector3.ZERO)
+	await wait_physics_frames(2)
+
+	vehicle.command(10.0, 0.0)
+	await wait_physics_frames(Engine.physics_ticks_per_second)
+	var touching_z := vehicle.global_position.z
+	vehicle.command(10.0, -0.3)
+	await wait_physics_frames(Engine.physics_ticks_per_second)
+
+	assert_true(vehicle.global_position.z > touching_z + 3.0, "kept moving along the wall")
+	assert_true(vehicle.global_basis.z.x < 0.05, "turned away from the wall")
+	assert_true(vehicle.global_position.x < 3.0, "never through the wall")
+
+
+func test_a_glancing_hit_keeps_more_speed_than_a_head_on_one() -> void:
+	var glancing := await _speed_after_hitting_a_wall_at("glancing", 15.0)
+	var head_on := await _speed_after_hitting_a_wall_at("head_on", 90.0)
+
+	assert_true(glancing > 5.0, "a scrape keeps most of its speed: %.2f" % glancing)
+	assert_almost_eq(head_on, 0.0, 0.5, "head-on stops")
+
+
+func _speed_after_hitting_a_wall_at(test_name: String, angle_deg: float) -> float:
+	var vehicle := await _vehicle_on_flat_ground("angle_" + test_name)
+	vehicle.get_parent().add_child(_wall_along_z(3.0))
+	vehicle.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(angle_deg)), Vector3.ZERO)
+	await wait_physics_frames(2)
+	vehicle.command(10.0, 0.0)
+	await wait_physics_frames(Engine.physics_ticks_per_second * 2)
+	return vehicle.speed_m_s
+
+
+func _wall_along_z(x_m: float) -> StaticBody3D:
+	## A wall standing along the z axis, its face at x = `x_m`, on the obstacles' layer.
+	var wall := StaticBody3D.new()
+	wall.collision_layer = CollisionLayers.OBSTACLES
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(1.0, 3.0, 200.0)
+	shape.shape = box
+	wall.add_child(shape)
+	wall.position = Vector3(x_m + 0.5, 1.5, 0.0)
+	return wall

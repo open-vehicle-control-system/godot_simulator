@@ -107,20 +107,16 @@ func _physics_process(delta: float) -> void:
 	)
 	var heading := BicycleModel.heading(motion["yaw_rad"])
 	var target := _on_ground(motion["rear_axle"] - heading * spec.rear_axle_z, heading)
-	var clear_share := _clear_share_of_move(target)
-	if clear_share < 1.0:
-		# Stopped by an obstacle: as far as the way is clear, then standing still against it.
-		var reached := global_position.lerp(target.origin, clear_share)
-		var yaw_reached := lerpf(_yaw_rad, motion["yaw_rad"], clear_share)
-		odometer_m += speed_m_s * delta * clear_share
-		speed_m_s = 0.0
-		yaw_rate_rad_s = 0.0
-		_yaw_rad = yaw_reached
-		target = _on_ground(reached, BicycleModel.heading(yaw_reached))
-	else:
-		_yaw_rad = motion["yaw_rad"]
-		yaw_rate_rad_s = motion["yaw_rate_rad_s"]
-		odometer_m += speed_m_s * delta
+	# Steering always turns the vehicle, so it can turn away from what it touches.
+	_yaw_rad = motion["yaw_rad"]
+	yaw_rate_rad_s = motion["yaw_rate_rad_s"]
+	var move := _move_past_obstacles(target)
+	if move["speed_kept"] < 1.0:
+		# Against an obstacle: it slides along it, keeping the share of its speed that runs
+		# along the obstacle; head-on, it stops.
+		speed_m_s *= move["speed_kept"]
+		target = _on_ground(move["origin"], heading)
+	odometer_m += signf(speed_m_s) * move["distance_m"]
 	longitudinal_acceleration_m_s2 = (speed_m_s - previous_speed_m_s) / delta
 	_placed = target
 	global_transform = _placed
@@ -134,25 +130,58 @@ func _set_up_body_shape() -> void:
 	_body_centre = Vector3(spec.body_centre.x, (bottom_m + top_m) * 0.5, spec.body_centre.z)
 
 
-func _clear_share_of_move(target: Transform3D) -> float:
-	## The share of the move to `target` the body makes before touching an obstacle: 1 when
-	## clear. Already into an obstacle, it moves freely away from it and not at all into it.
-	var motion := target.origin - global_position
+func _move_past_obstacles(target: Transform3D) -> Dictionary:
+	## Where the body ends up moving towards `target` (`origin`), how far it went (`distance_m`)
+	## and the share of its speed it keeps (`speed_kept`): all of it when the way is clear;
+	## against an obstacle, it goes to the contact and slides along the obstacle with the part
+	## of the rest of its move that runs along it.
+	var start := global_position
+	var motion := target.origin - start
 	if motion.is_zero_approx():
-		return 1.0
+		return {"origin": target.origin, "distance_m": 0.0, "speed_kept": 1.0}
+	var hit := _first_contact(target.basis, start, motion)
+	if float(hit["share"]) >= 1.0:
+		return {"origin": target.origin, "distance_m": motion.length(), "speed_kept": 1.0}
+	var hit_share: float = hit["share"]
+	var reached: Vector3 = start + motion * hit_share
+	var rest: Vector3 = motion * (1.0 - hit_share)
+	var normal: Vector3 = hit["normal"]
+	normal.y = 0.0
+	if normal.is_zero_approx():
+		return {"origin": reached, "distance_m": (reached - start).length(), "speed_kept": 0.0}
+	normal = normal.normalized()
+	var along: Vector3 = rest - normal * minf(rest.dot(normal), 0.0)
+	var slide_share := 0.0
+	if not along.is_zero_approx():
+		slide_share = _first_contact(target.basis, reached, along)["share"]
+	var origin: Vector3 = reached + along * slide_share
+	var kept: float = along.length() / rest.length() if not rest.is_zero_approx() else 0.0
+	return {"origin": origin, "distance_m": (origin - start).length(), "speed_kept": kept}
+
+
+func _first_contact(basis: Basis, from: Vector3, motion: Vector3) -> Dictionary:
+	## How much of `motion` the body, turned to `basis`, makes from `from` before touching an
+	## obstacle (`share`, 1 when clear), and the obstacle's surface normal there. Already into
+	## an obstacle, it moves freely away from it and not at all into it.
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = _body_shape
 	query.collision_mask = CollisionLayers.OBSTACLES
-	query.transform = (
-		Transform3D(target.basis, global_position) * Transform3D(Basis.IDENTITY, _body_centre)
-	)
+	query.transform = Transform3D(basis, from) * Transform3D(Basis.IDENTITY, _body_centre)
 	var space := get_world_3d().direct_space_state
 	# A sweep ignores what the shape starts inside of: that is asked first.
 	var touching := space.get_rest_info(query)
 	if not touching.is_empty():
-		return 1.0 if motion.dot(touching["normal"]) >= 0.0 else 0.0
+		var normal: Vector3 = touching["normal"]
+		return {"share": 1.0 if motion.dot(normal) >= 0.0 else 0.0, "normal": normal}
 	query.motion = motion
-	return space.cast_motion(query)[0]
+	var shares := space.cast_motion(query)
+	if shares[0] >= 1.0:
+		return {"share": 1.0, "normal": Vector3.ZERO}
+	query.transform.origin += motion * shares[1]
+	query.motion = Vector3.ZERO
+	var contact := space.get_rest_info(query)
+	var contact_normal: Vector3 = contact.get("normal", -motion.normalized())
+	return {"share": shares[0], "normal": contact_normal}
 
 
 func _on_ground(origin: Vector3, heading: Vector3) -> Transform3D:
