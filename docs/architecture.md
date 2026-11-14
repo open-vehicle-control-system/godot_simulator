@@ -145,6 +145,20 @@ primitives of a frame.
 Every viewport renders its own shadow maps, so what casts a shadow is drawn four times more
 per viewport; with the stereo pair that is three viewports.
 
+## Screen-space light
+
+The window, and only the window, is lit by what its own picture shows
+(`TrackWorld.window_lighting`): screen-space indirect light, at the engine's medium quality
+and half resolution, as strong as the pack's `indirect_light` asks. It costs the window 0.3 ms
+a frame on the GPU (at Spa's heaviest view the three viewports take 13.9 ms without it and
+14.2 ms with it, frame cap lifted), and darkens what is under a roof, a stand or the vehicle.
+The stereo cameras and the mirrors see the world's own lighting, without it: in their images
+it drew thin outlines around trees against a hill.
+
+Screen-space reflections are off everywhere: 0.4 ms over the three viewports, and nothing in
+the packs is wet or polished enough to show them but the vehicle's paint and a few windows,
+while grass verges seen at a grazing angle came out speckled.
+
 - **Near**, a tree is crossed cards cut out by its impostor's atlas, in a batch per impostor
   and 64 m cluster, so batches behind the camera or out of range are culled.
 - **Its shadow** is cast by another batch of the same cluster: the cards' silhouette as

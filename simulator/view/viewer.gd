@@ -17,6 +17,7 @@ var view := "chase"
 var keyboard_driving := false  ## the arrow keys drive (--keyboard)
 var holding_drive := false  ## a set speed and steering are held (--hold)
 var mirrors: Mirrors = null  ## the vehicle's mirrors, live only in the views that see them
+var lighting: Environment = null  ## what lights the window's view, when not the world's own
 
 var _vehicle: Vehicle
 var _link: SimulatorLink
@@ -42,6 +43,7 @@ func setup(
 	name = "Viewer"
 	_camera.fov = FIELD_OF_VIEW_DEG
 	_camera.far = FAR_M
+	_camera.environment = lighting
 	add_child(_camera)
 	_camera.current = true
 	var layer := CanvasLayer.new()

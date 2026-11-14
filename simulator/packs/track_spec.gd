@@ -3,6 +3,8 @@ extends RefCounted
 ## A track pack's contents, in Godot's world frame (+Y up). pack.json gives positions in a ROS
 ## world frame (x, y, z up), mapped as vectors are: Godot (y, z, x).
 
+const MAX_INDIRECT_LIGHT_STRENGTH := 4.0
+
 var id: String
 var name: String
 var directory: String
@@ -14,6 +16,7 @@ var sun_given := false
 var sun_azimuth_rad := 0.0  ## towards the sun, about +Y from +Z towards +X
 var sun_elevation_rad := 0.0
 var visibility_m := 0.0  ## how far one sees through the haze; 0 when the pack has no `haze`
+var indirect_light_strength := 1.0  ## of the light surfaces cast on each other; 0 for none
 var ground: GroundSpec = null  ## null when the pack has no `ground`
 var surfaces: Array[SurfaceRule] = []
 var trees: TreesSpec = null  ## null when the pack has no `trees`
@@ -51,6 +54,13 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 		spec.sun_elevation_rad = deg_to_rad(reader.positive("track.sun.elevation_deg", 90.0))
 	if reader.has("track.haze"):
 		spec.visibility_m = reader.positive("track.haze.visibility_m")
+	if reader.has("track.indirect_light"):
+		var strength := reader.number("track.indirect_light.strength")
+		reader.check(
+			strength >= 0.0 and strength <= MAX_INDIRECT_LIGHT_STRENGTH,
+			"track.indirect_light.strength"
+		)
+		spec.indirect_light_strength = strength
 	if reader.has("track.ground"):
 		spec.ground = GroundSpec.parse(reader_within_track, directory)
 	if reader.has("track.surfaces"):

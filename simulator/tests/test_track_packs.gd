@@ -55,6 +55,51 @@ func test_a_track_with_a_sky_shows_its_panorama() -> void:
 	assert_true(environment.sky.sky_material is PanoramaSkyMaterial)
 
 
+func test_the_window_is_lit_indirectly_and_the_world_is_not() -> void:
+	var track := _flat_track("indirect", PackFixtures.track_manifest("flat"))
+	var world_lighting: Environment = TrackWorld.lighting(track)["environment"]
+
+	var window_lighting := TrackWorld.window_lighting(world_lighting, track)
+
+	assert_true(window_lighting.ssil_enabled, "the window")
+	assert_almost_eq(window_lighting.ssil_intensity, 1.0)
+	assert_true(not world_lighting.ssil_enabled, "the world, as the stereo cameras see it")
+	assert_true(not window_lighting.ssr_enabled and not world_lighting.ssr_enabled)
+	assert_eq(window_lighting.sky, world_lighting.sky)
+
+
+func test_a_pack_sets_how_strong_the_indirect_light_is() -> void:
+	var manifest := PackFixtures.track_manifest("flat")
+	manifest["track"]["indirect_light"] = {"strength": 1.5}
+	var track := _flat_track("indirect_strength", manifest)
+
+	var lit := TrackWorld.window_lighting(TrackWorld.lighting(track)["environment"], track)
+
+	assert_almost_eq(lit.ssil_intensity, 1.5)
+
+
+func test_a_pack_does_without_indirect_light() -> void:
+	var manifest := PackFixtures.track_manifest("flat")
+	manifest["track"]["indirect_light"] = {"strength": 0.0}
+	var track := _flat_track("indirect_none", manifest)
+
+	var lit := TrackWorld.window_lighting(TrackWorld.lighting(track)["environment"], track)
+
+	assert_true(not lit.ssil_enabled)
+
+
+func test_refuses_an_indirect_light_out_of_range() -> void:
+	for strength in [-0.5, 4.5, "strong"]:
+		var manifest := PackFixtures.track_manifest("flat")
+		manifest["track"]["indirect_light"] = {"strength": strength}
+		var directory := PackFixtures.fresh_directory("indirect_refused")
+		PackFixtures.write_flat_world(PackFixtures.write_pack(directory, manifest), 20.0)
+
+		var found := PackLibrary.scan([directory]).load_track("flat")
+
+		assert_true(found.get("error", "").contains("track.indirect_light.strength"), str(found))
+
+
 func _flat_track(test_name: String, manifest: Dictionary) -> TrackSpec:
 	var directory := PackFixtures.fresh_directory(test_name)
 	PackFixtures.write_flat_world(PackFixtures.write_pack(directory, manifest), 20.0)

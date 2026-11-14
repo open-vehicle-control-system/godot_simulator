@@ -18,6 +18,7 @@ const DEFAULT_VISIBILITY_M := 20000.0
 const VISIBILITY_CONTRAST := 0.02
 const SSAO_RADIUS_M := 1.2
 const SSAO_INTENSITY := 2.2
+const INDIRECT_LIGHT_RADIUS_M := 5.0
 const GLOW_INTENSITY := 0.25
 const GLOW_THRESHOLD := 1.4
 
@@ -92,6 +93,17 @@ static func lighting_under(track: TrackSpec, sky_read: Dictionary) -> Dictionary
 	lit.fog_aerial_perspective = 1.0
 	lit.fog_sky_affect = 0.0
 	return {"environment": lit, "sun": _sun(sun_direction)}
+
+
+static func window_lighting(lighting: Environment, track: TrackSpec) -> Environment:
+	## `lighting` as the window shows it: with the light the surfaces on screen cast on each
+	## other, as strong as the track's pack wants it. The cameras that measure see `lighting`
+	## itself, which is the same from wherever one looks.
+	var shown: Environment = lighting.duplicate()
+	shown.ssil_enabled = track.indirect_light_strength > 0.0
+	shown.ssil_radius = INDIRECT_LIGHT_RADIUS_M
+	shown.ssil_intensity = track.indirect_light_strength
+	return shown
 
 
 static func haze_density_per_m(visibility_m: float) -> float:

@@ -95,6 +95,7 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 	var viewer := Viewer.new()
 	viewer.keyboard_driving = options.keyboard
 	viewer.holding_drive = options.hold_given
+	viewer.lighting = TrackWorld.window_lighting(lighting["environment"], track)
 	add_child(viewer)
 	viewer.setup(vehicle, link, stereo, "%s  |  %s" % [spec.name, track.name], options.view)
 	viewer.show_stereo(options.show_stereo)

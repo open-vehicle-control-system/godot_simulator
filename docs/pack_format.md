@@ -136,6 +136,7 @@ for a vehicle; x, y, z up for a world.
   "sky": "sky.hdr",
   "sun": {"azimuth_deg": 45.0, "elevation_deg": 40.0},
   "haze": {"visibility_m": 16000.0},
+  "indirect_light": {"strength": 1.0},
   "spawn": {"position_m": [196.92, -127.35, 21.32], "yaw_deg": -71.0},
   "ground": {...},
   "surfaces": [...],
@@ -158,6 +159,10 @@ for a vehicle; x, y, z up for a world.
 - `haze` is optional: `visibility_m` is how far one sees through the air, the distance at
   which a black object keeps 2% of its contrast against the sky. Without it the air is a
   clear day's, 20 km.
+- `indirect_light` is optional, a choice of look: `strength` (0 to 4, 1 without the field) is
+  how strongly the surfaces the window shows light and shade each other, which darkens what
+  is under a roof, a stand or the vehicle; 0 does without, and saves the window 0.3 ms a
+  frame. It changes the window only, never the stereo cameras' images.
 - `spawn` is where the vehicle starts, yaw counter-clockwise from x seen from above.
 - `ground`, `surfaces`, `trees` and `signs` are optional: see [Surfaces](#surfaces),
   [Trees](#trees) and [Signs and signals](#signs-and-signals).
