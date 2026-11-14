@@ -1,11 +1,11 @@
 ---
 id: TASK-26
 title: Record deterministically with Godot's movie mode
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-14 19:59'
-updated_date: '2026-11-14 21:33'
+updated_date: '2026-11-14 23:27'
 labels: []
 dependencies:
   - TASK-24
@@ -20,9 +20,11 @@ A --record mode that renders at a fixed simulated frame rate frame by frame (God
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Two runs of the same recording produce identical poses and identical ground-truth files
+- [x] #1 Two runs of the same recording produce identical poses and identical ground-truth files
 - [x] #2 Documented in docs/stereo.md with an example command
 <!-- AC:END -->
+
+
 
 ## Implementation Notes
 

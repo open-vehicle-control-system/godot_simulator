@@ -1,9 +1,10 @@
 ---
 id: TASK-32
 title: Find why a recorded segmentation differs by a few pixels between two runs
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-14 21:31'
+updated_date: '2026-11-14 23:27'
 labels: []
 dependencies: []
 ordinal: 32000

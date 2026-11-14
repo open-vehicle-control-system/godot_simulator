@@ -94,12 +94,11 @@ quits when done:
   `--record-seconds`, or as long as the drive log.
 - Every tile within the streaming radius is loaded before a frame is drawn, instead of over
   the following frames, and no frame is skipped: writing holds the simulation back.
-- Two runs write the same `poses.csv`, `calib.json`, depth and disparity, byte for byte, and
-  the same segmentation but, on a real track, for one frame in fifty or so, where a few
-  pixels (four or eight) of a building or a wall are `unlabelled` in one run: not explained
-  yet (TASK-32). The left and right images are the same but for the last bit of a few pixels
-  (ten or so of a 1280 × 720 frame, more in the first frames), which the renderer does not
-  promise; sensor noise, exposure and motion blur are the same in both runs.
+- Two runs write the same `poses.csv`, `calib.json`, depth, disparity and segmentation, byte
+  for byte (60 simulated seconds of Spa and of Mettet). The left and right images are the
+  same but for the last bit of a few pixels (ten or so of a 1280 × 720 frame, more in the
+  first frames), which the renderer does not promise; sensor noise, exposure and motion
+  blur are the same in both runs.
 - Five simulated seconds of Mettet with a 1280 × 720 pair, its ground truth and every camera
   effect take 18 s (Radeon RX 7800 XT), the first second loading the tiles around the start.
 
@@ -113,6 +112,9 @@ the renderer drew:
 | `depth/N.npy` | 32-bit floats, shape (height, width): metres along the left camera's optical axis (OpenCV's z, not the length of the ray), from the depth buffer; 0 where there is only sky |
 | `disparity/N.npy` | 32-bit floats: `fx * baseline_m / depth` in pixels, the shift of the pixel's surface towards the left in the right image; 0 where there is only sky |
 | `segmentation/N.png` | the class of each pixel, as its colour |
+
+A surface whose class comes from a label pass (buildings, structures, signs, the vehicle)
+has the depth of its label, drawn 5e-5 of the distance nearer: 2 mm at 40 m.
 
 `numpy.load` reads a `.npy` file (so does `Nx.load_numpy!`); it is a 128-byte header, then
 the floats, little-endian, row by row from the top.

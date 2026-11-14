@@ -277,7 +277,10 @@ render layer, which no object is on. Shaders read the camera's layers: for that 
 the world's own shaders emit their class instead of their colour, and the materials that are
 not the world's (a rule's `roof`, `facade`, `seats` and `plain`, the sign posts, the vehicle)
 carry a label pass, a second material drawn over them whose triangles are empty for every
-other camera. A compositor effect then reads that camera's depth buffer and labels. The label
+other camera. A label pass is drawn a hair nearer than its surface along each ray and writes
+its depth: one only tested against the depth buffer, without writing it, lost a 2x2 quad
+about one frame in 300 on RADV (RX 7800 XT), though its depth passed the test. A compositor
+effect then reads that camera's depth buffer and labels. The label
 passes are only added with `--ground-truth`, except on the sign posts and signal heads, a few
 draws a tile.
 
