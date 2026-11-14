@@ -6,9 +6,11 @@ extends Node
 ## Poses are the vehicle's base_link in the world, in ROS frames as the link reports them.
 
 const POSES_HEADER := "frame,time_s,x_m,y_m,z_m,qx,qy,qz,qw,speed_m_s,steering_rad"
-## Files being written at once: a frame handed over while as many are is not recorded, so
-## a disk or encoder slower than the camera never holds the simulation back.
-const MAX_FILES_BEING_WRITTEN := 32
+## The processor's threads left to the simulation while files are written, one a thread: a
+## frame handed over while every other thread writes is not recorded, so a disk or encoder
+## slower than the camera never holds the simulation back.
+const THREADS_KEPT_FREE := 4
+const MIN_FILES_BEING_WRITTEN := 4
 
 ## Low priority tasks share a few of the pool's threads: too few to encode at the camera's rate.
 const HIGH_PRIORITY := true
@@ -25,6 +27,9 @@ var _poses: FileAccess
 var _writing_tasks: Array[int] = []
 var _directories_made := {}
 var _frames_skipped := 0
+var _max_files_being_written := maxi(
+	MIN_FILES_BEING_WRITTEN, OS.get_processor_count() - THREADS_KEPT_FREE
+)
 
 
 func setup(
@@ -96,7 +101,7 @@ func _record(frame: StereoFrame, shown: Dictionary) -> void:
 	if _poses == null:
 		return
 	_writing_tasks = _writing_tasks.filter(func(task): return not _completed(task))
-	if _writing_tasks.size() >= MAX_FILES_BEING_WRITTEN:
+	if _writing_tasks.size() >= _max_files_being_written:
 		_frames_skipped += 1
 		return
 	for image in frame.images:

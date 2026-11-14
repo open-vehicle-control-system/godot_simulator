@@ -1,8 +1,11 @@
 #version 450
 // The ground truth of a frame, from what the ground truth camera drew: the depth along the optical axis in metres, the disparity in pixels, and the
-// colour of each pixel's class. A pixel no surface covers is sky: depth and disparity 0.
+// colour of each pixel's class, in the image of the left camera's lens. A pixel no surface
+// covers is sky: depth and disparity 0.
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+#include "distortion.inc"
 
 layout(set = 0, binding = 0) uniform sampler2D depth_buffer;
 layout(set = 0, binding = 1) uniform sampler2D labels;
@@ -19,6 +22,8 @@ layout(push_constant, std430) uniform Camera {
 	float classes_per_mark;
 	float faintest_mark;
 	float unlabelled_class;
+	vec4 radial_tangential;  // k1, k2, p1, p2
+	vec4 lens;  // k3, overscan, half width and half height of the image in focal lengths
 	float sky_class;
 } camera;
 
@@ -28,16 +33,19 @@ void main() {
 	if (pixel.x >= size.x || pixel.y >= size.y) {
 		return;
 	}
+	// The image's pixel shows what the lens shows there: one pixel of the wider view drawn.
+	vec2 drawn_size = vec2(textureSize(depth_buffer, 0));
+	vec2 uv = drawn_uv((vec2(pixel) + 0.5) / vec2(size), camera.radial_tangential, camera.lens);
+	ivec2 drawn = clamp(ivec2(uv * drawn_size), ivec2(0), ivec2(drawn_size) - 1);
 	// Reverse depth: 0 is the far plane, where nothing was drawn.
-	float depth = texelFetch(depth_buffer, pixel, 0).r;
-	vec2 clip = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
-	vec4 seen = camera.inverse_projection * vec4(clip, depth, 1.0);
+	float depth = texelFetch(depth_buffer, drawn, 0).r;
+	vec4 seen = camera.inverse_projection * vec4(uv * 2.0 - 1.0, depth, 1.0);
 	float metres = depth > 0.0 ? -seen.z / seen.w : 0.0;
 	imageStore(depth_m, pixel, vec4(metres));
 	imageStore(disparity_px, pixel,
 		vec4(depth > 0.0 ? camera.focal_px_times_baseline_m / metres : 0.0));
 	// Something transparent over a label dims its class and its mark alike.
-	vec2 label = texelFetch(labels, pixel, 0).rg;
+	vec2 label = texelFetch(labels, drawn, 0).rg;
 	float shown_class = label.g > camera.faintest_mark
 		? round(label.r / label.g * camera.classes_per_mark) : camera.unlabelled_class;
 	shown_class = depth > 0.0 ? shown_class : camera.sky_class;

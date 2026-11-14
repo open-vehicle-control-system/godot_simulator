@@ -14,10 +14,40 @@ class StereoOptics:
 	var baseline_m: float
 	var pitch_deg: float  ## downwards
 	var rate_hz: float
+	var distortion: LensDistortion = null  ## null for a pinhole
+	var vignetting := 0.0  ## the share of the light lost in the image's corners
+	var read_noise := 0.0  ## the sensor noise's deviation in the dark, in scene light
+	var shot_noise := 0.0  ## the deviation the noise gains per square root of scene light
+	var exposure_target := 0.0  ## the mean scene light the exposure adapts to; 0 for fixed
+	var exposure_speed_per_s := 0.0
+	var exposure_max_stops := 0.0  ## how far the exposure moves either way
+	var shutter_s := 0.0  ## how long a frame gathers light: 0 for no motion blur
+
+	func looks_like_a_camera() -> bool:
+		## True when an image of this pair is more than what a pinhole shows.
+		return (
+			distortion != null
+			or vignetting > 0.0
+			or read_noise > 0.0
+			or shot_noise > 0.0
+			or exposure_target > 0.0
+			or shutter_s > 0.0
+		)
+
+	func half_extent() -> Vector2:
+		## How far the image reaches from its centre, in focal lengths.
+		var half_width := tan(deg_to_rad(hfov_deg) * 0.5)
+		return Vector2(half_width, half_width * height_px / width_px)
+
+	func overscan() -> float:
+		## How many times wider than the image's pinhole the view drawn for it must be.
+		return distortion.overscan(half_extent()) if distortion != null else 1.0
 
 
 ## A pinhole camera sees less than half the world.
 const MAX_FIELD_OF_VIEW_DEG := 180.0
+## The widest the view drawn for a distorted image is, in images.
+const MAX_OVERSCAN := 2.0
 
 var id: String
 var name: String
@@ -67,6 +97,7 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 	spec.stereo.baseline_m = reader.positive("vehicle.stereo.baseline_m")
 	spec.stereo.pitch_deg = reader.number("vehicle.stereo.pitch_deg")
 	spec.stereo.rate_hz = reader.positive("vehicle.stereo.rate_hz")
+	spec._read_camera_effects(reader)
 	var vehicle_section: Variant = manifest.get("vehicle")
 	var reader_within_vehicle := ManifestReader.new(
 		manifest["id"], vehicle_section if vehicle_section is Dictionary else {}, "vehicle."
@@ -80,6 +111,38 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 	if reader.error != "":
 		return {"error": reader.error}
 	return {"vehicle": spec}
+
+
+func _read_camera_effects(reader: ManifestReader) -> void:
+	## What makes the stereo pair's images those of cameras: each is off when absent.
+	if reader.has("vehicle.stereo.distortion"):
+		var coefficients := []
+		for coefficient in ["k1", "k2", "p1", "p2", "k3"]:
+			coefficients.append(reader.number("vehicle.stereo.distortion.%s" % coefficient))
+		stereo.distortion = LensDistortion.new(coefficients)
+		reader.check(
+			(
+				reader.error != ""
+				or (
+					not stereo.distortion.folds(stereo.half_extent())
+					and stereo.overscan() <= MAX_OVERSCAN
+				)
+			),
+			"vehicle.stereo.distortion"
+		)
+	if reader.has("vehicle.stereo.vignetting"):
+		stereo.vignetting = reader.positive("vehicle.stereo.vignetting", 1.0)
+	if reader.has("vehicle.stereo.noise"):
+		stereo.read_noise = reader.number("vehicle.stereo.noise.read")
+		reader.check(stereo.read_noise >= 0.0, "vehicle.stereo.noise.read")
+		stereo.shot_noise = reader.number("vehicle.stereo.noise.shot")
+		reader.check(stereo.shot_noise >= 0.0, "vehicle.stereo.noise.shot")
+	if reader.has("vehicle.stereo.exposure"):
+		stereo.exposure_target = reader.positive("vehicle.stereo.exposure.target")
+		stereo.exposure_speed_per_s = reader.positive("vehicle.stereo.exposure.speed_per_s")
+		stereo.exposure_max_stops = reader.positive("vehicle.stereo.exposure.max_stops")
+	if reader.has("vehicle.stereo.motion_blur"):
+		stereo.shutter_s = reader.positive("vehicle.stereo.motion_blur.shutter_s")
 
 
 func wheelbase_m() -> float:

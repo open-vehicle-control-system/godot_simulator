@@ -51,6 +51,9 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `sensors/stereo_frame.gd`, `sensors/numpy_file.gd` | What the camera shows of one frame; a float map as a `.npy` file |
 | `sensors/segmentation.gd`, `sensors/shaders/label.gdshader`, `label.gdshaderinc` | The segmentation classes, and how a surface shows its class to the ground truth camera |
 | `sensors/ground_truth_camera.gd`, `sensors/ground_truth_effect.gd`, `sensors/shaders/ground_truth.comp` | The left camera's view as depth, disparity and segmentation ([Stereo camera](./stereo.md#ground-truth)) |
+| `sensors/lens_distortion.gd`, `sensors/shaders/distortion.inc` | A lens's distortion in OpenCV's model, on the CPU and on the GPU |
+| `sensors/camera_effect.gd`, `sensors/shaders/camera.comp` | What makes a stereo camera's view the image of a camera: distortion, motion blur, vignetting, noise, exposure ([Stereo camera](./stereo.md#cameras-not-pinholes)) |
+| `sensors/compute_shader.gd` | Compiles the compute shaders, with their includes |
 | `view/viewer.gd`, `view/view_poses.gd` | The views, the HUD and the keys |
 
 Logic that only computes is in scripts of static functions, tested without a scene; nodes hold

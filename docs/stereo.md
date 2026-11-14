@@ -13,15 +13,46 @@ pixel centres).
 Linked to OVCS, the pair goes over the link as JPEG `image` packets at `rate_hz`
 ([The simulator link](./simulator_link.md)). V shows it along the bottom of the window.
 
+## Cameras, not pinholes
+
+The vehicle pack may give the pair a lens and a sensor
+([Pack format](./pack_format.md#vehicle-packs)): distortion, vignetting, noise, an exposure
+that adapts, motion blur. Each is off when the pack does not name it. They are applied to the
+two cameras' views only, never the window, in scene light before tone mapping, so the pair
+sent over the link, shown by V and recorded is the cameras'.
+
+- **Distortion** is OpenCV's model: a point a pinhole shows at `(x, y)` focal lengths from the
+  optical axis is shown at `x' = x (1 + k1 r² + k2 r⁴ + k3 r⁶) + 2 p1 x y + p2 (r² + 2 x²)`,
+  `y' = y (1 + k1 r² + k2 r⁴ + k3 r⁶) + p1 (r² + 2 y²) + 2 p2 x y`, at pixel
+  `(fx x' + cx, fy y' + cy)`. `calib.json` gives `distortion_coefficients` as
+  `[k1, k2, p1, p2, k3]`, OpenCV's order (zeros for a pinhole), with `fx`, `fy`, `cx`, `cy`
+  as its camera matrix: `cv2.undistort` or `cv2.stereoRectify` take them as they are. Both
+  cameras have the same lens.
+- The view is drawn as a pinhole wide enough to hold all the lens sees (1.3 times the image
+  for the lens above), resampled through the lens, and brought to the image's size.
+- **The ground truth is that of the distorted left image**: depth, disparity and class at a
+  pixel are those of the surface the lens shows there. Disparity stays
+  `fx * baseline_m / depth`, the disparity between the rectified images.
+- **Exposure**: a scene's mean light depends on the track's sky and sun; Spa's start straight
+  on a clear day meters 0.3, so a `target` of 0.3 leaves it as a pinhole pair shows it.
+- **Motion blur** follows what the renderer tells of every surface's motion across the
+  image since the previous frame; the sky turns with the camera.
+- Noise is drawn from the frame's number: two runs that draw the same frames have the same.
+
+On Spa at 120 km/h (1280 × 720 pair, Radeon RX 7800 XT), the GPU spends 9.3 ms a frame over
+all viewports with a pinhole pair; vignetting, noise and exposure add 0.1 ms each, motion
+blur 0.2 ms, the distortion above 1.3 ms (both views are drawn 1.3 times wider and higher),
+all five together 1.4 ms.
+
 ## Recording
 
 `--stereo-record=DIR` records at `rate_hz`; with `--ground-truth`, each pair's ground truth too:
 
 ```text
 DIR/
-  calib.json      intrinsics (width, height, fx, fy, cx, cy), baseline_m, fields of view,
-                  mount_m (ROS base_link) and pitch_down_deg; with ground truth, what its
-                  maps hold and the segmentation classes
+  calib.json      intrinsics (width, height, fx, fy, cx, cy), distortion_coefficients,
+                  baseline_m, fields of view, mount_m (ROS base_link) and pitch_down_deg;
+                  with ground truth, what its maps hold and the segmentation classes
   poses.csv       frame,time_s,x_m,y_m,z_m,qx,qy,qz,qw,speed_m_s,steering_rad
   left/000000.png
   right/000000.png
@@ -36,13 +67,15 @@ z forward, the right camera `baseline_m` along x from the left one.
 
 A frame is read back from the GPU a few frames after it is drawn and its files are written on
 worker threads, so recording never makes a frame wait. A PNG of 1280 × 720 takes a quarter of
-a second of one core to encode: when more than 32 files are being written, the frame due is
-skipped rather than the simulation held back, and the recorder tells how many were when it
-ends. Rows of `poses.csv` and files are numbered alike, without gaps.
+a second of one core to encode, more with sensor noise: when all the processor's threads but
+four are writing, the frame due is skipped rather than the simulation held back, and the
+recorder tells how many were when it ends. Rows of `poses.csv` and files are numbered alike,
+without gaps.
 
 ## Ground truth
 
-The ground truth is of the left image, pixel for pixel, from what the renderer drew:
+The ground truth is of the left image, pixel for pixel, lens distortion included, from what
+the renderer drew:
 
 | File | Holds |
 |---|---|

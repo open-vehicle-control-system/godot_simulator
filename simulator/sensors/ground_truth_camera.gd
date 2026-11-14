@@ -15,13 +15,16 @@ var _effect: GroundTruthEffect
 func setup(optics: VehicleSpec.StereoOptics, focal_px: float) -> void:
 	## Draws the ground truth of a camera of `optics` focusing at `focal_px`.
 	name = "GroundTruthCamera"
-	_viewport.size = Vector2i(optics.width_px, optics.height_px)
+	# As wide as the view the left camera draws for its lens, a pixel of it per image pixel.
+	_viewport.size = Vector2i(
+		(Vector2(optics.width_px, optics.height_px) * optics.overscan()).ceil()
+	)
 	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	# Labels are emitted, not lit: no light, shadow or fog is computed for them.
 	_viewport.debug_draw = Viewport.DEBUG_DRAW_UNSHADED
 	camera.cull_mask = Segmentation.ground_truth_cull_mask()
 	camera.environment = _nothing_but_labels()
-	_effect = GroundTruthEffect.new(focal_px * optics.baseline_m)
+	_effect = GroundTruthEffect.new(optics, focal_px)
 	camera.compositor = Compositor.new()
 	camera.compositor.compositor_effects = [_effect]
 	_viewport.add_child(camera)

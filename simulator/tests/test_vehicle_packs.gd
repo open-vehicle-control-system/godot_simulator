@@ -133,3 +133,74 @@ func test_refuses_values_out_of_range() -> void:
 		assert_true(
 			found.get("error", "").begins_with("small_car: %s is out of range" % field), str(found)
 		)
+
+
+func test_a_stereo_pair_without_camera_fields_is_a_pinhole_with_no_effect() -> void:
+	var stereo := _stereo_with({})
+
+	assert_true(stereo.distortion == null)
+	assert_true(not stereo.looks_like_a_camera())
+	assert_eq(stereo.overscan(), 1.0)
+
+
+func test_reads_what_makes_the_stereo_pair_look_like_cameras() -> void:
+	var stereo := _stereo_with(
+		{
+			"distortion": {"k1": -0.2, "k2": 0.03, "p1": 0.001, "p2": -0.002, "k3": 0.004},
+			"vignetting": 0.35,
+			"noise": {"read": 0.003, "shot": 0.012},
+			"exposure": {"target": 0.12, "speed_per_s": 2.0, "max_stops": 3.0},
+			"motion_blur": {"shutter_s": 0.008},
+		}
+	)
+
+	assert_eq(stereo.distortion.coefficients(), [-0.2, 0.03, 0.001, -0.002, 0.004])
+	assert_eq(stereo.vignetting, 0.35)
+	assert_eq([stereo.read_noise, stereo.shot_noise], [0.003, 0.012])
+	assert_eq(stereo.exposure_target, 0.12)
+	assert_eq(stereo.exposure_speed_per_s, 2.0)
+	assert_eq(stereo.exposure_max_stops, 3.0)
+	assert_eq(stereo.shutter_s, 0.008)
+	assert_true(stereo.looks_like_a_camera())
+	assert_true(stereo.overscan() > 1.1, "a barrel lens sees wider than its image's pinhole")
+
+
+func test_each_camera_effect_is_on_by_its_own() -> void:
+	for effect: Dictionary in [
+		{"vignetting": 0.2},
+		{"noise": {"read": 0.0, "shot": 0.01}},
+		{"exposure": {"target": 0.1, "speed_per_s": 1.0, "max_stops": 2.0}},
+		{"motion_blur": {"shutter_s": 0.01}},
+		{"distortion": {"k1": 0.05, "k2": 0.0, "p1": 0.0, "p2": 0.0, "k3": 0.0}},
+	]:
+		assert_true(_stereo_with(effect).looks_like_a_camera(), str(effect))
+
+
+func test_refuses_camera_effects_out_of_range() -> void:
+	var cases := {
+		"vehicle.stereo.vignetting": {"vignetting": 1.5},
+		"vehicle.stereo.noise.read": {"noise": {"read": -0.1, "shot": 0.01}},
+		"vehicle.stereo.exposure.target":
+		{"exposure": {"target": 0.0, "speed_per_s": 1.0, "max_stops": 2.0}},
+		"vehicle.stereo.motion_blur.shutter_s": {"motion_blur": {"shutter_s": 0.0}},
+		# A lens that shows a point twice within the image.
+		"vehicle.stereo.distortion":
+		{"distortion": {"k1": -0.9, "k2": 0.0, "p1": 0.0, "p2": 0.0, "k3": 0.0}},
+	}
+	for field in cases:
+		var found := _vehicle_with_stereo(cases[field])
+		assert_eq(found, {"error": "small_car: %s is out of range" % field})
+
+
+func _stereo_with(camera_fields: Dictionary) -> VehicleSpec.StereoOptics:
+	var found := _vehicle_with_stereo(camera_fields)
+	assert_true(found.has("vehicle"), str(found))
+	return found["vehicle"].stereo
+
+
+func _vehicle_with_stereo(camera_fields: Dictionary) -> Dictionary:
+	var directory := PackFixtures.fresh_directory("camera_fields")
+	var manifest := PackFixtures.vehicle_manifest("small_car")
+	manifest["vehicle"]["stereo"].merge(camera_fields)
+	PackFixtures.write_pack(directory, manifest)
+	return PackLibrary.scan([directory]).load_vehicle("small_car")

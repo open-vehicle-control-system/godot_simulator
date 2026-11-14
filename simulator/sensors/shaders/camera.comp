@@ -1,0 +1,127 @@
+#version 450
+// What makes a rendered view the image of a camera, in three passes over the view's colour:
+// metering adapts the exposure to the light of the scene; the camera pass writes, for each
+// pixel of the image, what the lens shows there (distortion), gathered while the shutter is
+// open (motion blur), darkened towards the corners (vignetting), with the sensor's noise,
+// at the exposure; the last pass copies the result back over the view.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+#include "distortion.inc"
+
+const float PASS_METER = 0.0;
+const float PASS_CAMERA = 1.0;
+const ivec2 METERED = ivec2(16, 9);
+const int SHUTTER_TAPS = 8;
+const vec3 LUMINANCE = vec3(0.2126, 0.7152, 0.0722);
+
+layout(rgba16f, set = 0, binding = 0) uniform restrict writeonly image2D target;
+layout(set = 0, binding = 1) uniform sampler2D source;
+layout(set = 0, binding = 2) uniform sampler2D depth_buffer;
+layout(set = 0, binding = 3) uniform sampler2D velocity;
+layout(r32f, set = 0, binding = 4) uniform image2D exposure_gain;
+layout(set = 0, binding = 5, std140) uniform Camera {
+	mat4 to_previous_view;  // from this frame's view space to the previous frame's
+	vec4 radial_tangential;  // k1, k2, p1, p2
+	vec4 lens;  // k3, overscan, half width and half height of the image in focal lengths
+	vec4 sensor;  // vignetting, read noise, shot noise, the share of the frame the shutter is open
+	vec4 exposure;  // target, share of the way adapted this frame, greatest gain, 1 when adapting
+	vec4 frame;  // number, camera
+} camera;
+
+layout(push_constant, std430) uniform Pass {
+	float kind;
+	float padding[3];
+} this_pass;
+
+uint hashed(uint seed) {
+	seed = seed * 747796405u + 2891336453u;
+	uint word = ((seed >> ((seed >> 28u) + 4u)) ^ seed) * 277803737u;
+	return (word >> 22u) ^ word;
+}
+
+float uniform_noise(inout uint seed) {
+	seed = hashed(seed);
+	return (float(seed) + 0.5) / 4294967296.0;
+}
+
+vec3 gaussian_noise(ivec2 pixel) {
+	uint seed = hashed(uint(pixel.x) + 8192u * uint(pixel.y))
+		^ hashed(uint(camera.frame.x) * 2u + uint(camera.frame.y) + 77u);
+	vec3 noise;
+	for (int channel = 0; channel < 3; channel++) {
+		float radius = sqrt(-2.0 * log(uniform_noise(seed)));
+		noise[channel] = radius * cos(6.2831853 * uniform_noise(seed));
+	}
+	return noise;
+}
+
+// How far, across the view, what it shows at `uv` has come since the previous frame. The
+// renderer tells it of every surface; the sky turns with the camera.
+vec2 moved_since_previous_frame(vec2 uv) {
+	if (textureLod(depth_buffer, uv, 0.0).r > 0.0) {
+		return -textureLod(velocity, uv, 0.0).rg;
+	}
+	vec2 half_extent = camera.lens.zw * camera.lens.y;
+	vec2 across = (uv * 2.0 - 1.0) * half_extent;
+	vec4 before = camera.to_previous_view * vec4(across.x, -across.y, -1.0, 0.0);
+	return uv - (vec2(before.x, -before.y) / max(-before.z, 1e-3) / half_extent * 0.5 + 0.5);
+}
+
+void meter() {
+	float log_light = 0.0;
+	for (int row = 0; row < METERED.y; row++) {
+		for (int column = 0; column < METERED.x; column++) {
+			vec2 uv = (vec2(column, row) + 0.5) / vec2(METERED);
+			log_light += log(max(dot(textureLod(source, uv, 0.0).rgb, LUMINANCE), 1e-4));
+		}
+	}
+	float light = exp(log_light / float(METERED.x * METERED.y));
+	float wanted = clamp(camera.exposure.x / light, 1.0 / camera.exposure.z, camera.exposure.z);
+	float gain = imageLoad(exposure_gain, ivec2(0)).r;
+	gain = gain > 0.0 ? mix(gain, wanted, camera.exposure.y) : wanted;
+	imageStore(exposure_gain, ivec2(0), vec4(gain));
+}
+
+void main() {
+	ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+	if (this_pass.kind == PASS_METER) {
+		if (pixel == ivec2(0)) {
+			meter();
+		}
+		return;
+	}
+	ivec2 size = imageSize(target);
+	if (pixel.x >= size.x || pixel.y >= size.y) {
+		return;
+	}
+	if (this_pass.kind != PASS_CAMERA) {
+		imageStore(target, pixel, texelFetch(source, pixel, 0));
+		return;
+	}
+	vec2 image_uv = (vec2(pixel) + 0.5) / vec2(size);
+	vec2 uv = drawn_uv(image_uv, camera.radial_tangential, camera.lens);
+	vec3 light = textureLod(source, uv, 0.0).rgb;
+	if (camera.sensor.w > 0.0) {
+		// The shutter closes as the frame is drawn: it gathered what led there.
+		vec2 shutter_path = -moved_since_previous_frame(uv) * camera.sensor.w;
+		light = vec3(0.0);
+		for (int tap = 0; tap < SHUTTER_TAPS; tap++) {
+			light += textureLod(
+				source, uv + shutter_path * (float(tap) + 0.5) / float(SHUTTER_TAPS), 0.0).rgb;
+		}
+		light /= float(SHUTTER_TAPS);
+	}
+	vec2 from_centre = image_uv * 2.0 - 1.0;
+	light *= 1.0 - camera.sensor.x * 0.5 * dot(from_centre, from_centre);
+	if (camera.sensor.y > 0.0 || camera.sensor.z > 0.0) {
+		vec3 deviation = sqrt(camera.sensor.y * camera.sensor.y
+			+ camera.sensor.z * camera.sensor.z * max(light, vec3(0.0)));
+		// Drawn wider than the image, the view is averaged down to it, and its noise with it.
+		light = max(light + camera.lens.y * deviation * gaussian_noise(pixel), vec3(0.0));
+	}
+	if (camera.exposure.w > 0.5) {
+		light *= imageLoad(exposure_gain, ivec2(0)).r;
+	}
+	imageStore(target, pixel, vec4(light, 1.0));
+}

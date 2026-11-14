@@ -85,6 +85,26 @@ for a vehicle; x, y, z up for a world.
 - `driver_pitch_deg` tilts the cockpit view up; negative looks down.
 - `stereo.mount_m` is midway between the two cameras; positive `pitch_deg` tilts them down. See
   [Stereo camera](./stereo.md).
+- `stereo` may also say what makes its images those of cameras; each is off when absent, and
+  a pair with none is a pinhole pair, drawn as before:
+
+  ```json
+  "distortion": {"k1": -0.17, "k2": 0.03, "p1": 0.0005, "p2": -0.0003, "k3": 0.0},
+  "vignetting": 0.35,
+  "noise": {"read": 0.004, "shot": 0.012},
+  "exposure": {"target": 0.3, "speed_per_s": 2.0, "max_stops": 3.0},
+  "motion_blur": {"shutter_s": 0.008}
+  ```
+
+  | Field | Meaning |
+  |---|---|
+  | `distortion` | the lens's distortion in OpenCV's model, its five coefficients all given; `width_px`, `height_px` and `hfov_deg` stay those of the image and of its pinhole (`fx`). Refused when the lens shows a point twice within the image, or sees more than twice as wide as the pinhole |
+  | `vignetting` | the share of the light lost in the image's corners, above 0 and below 1; it grows with the square of the distance from the centre |
+  | `noise` | the sensor's noise, in scene light before tone mapping: its deviation is `sqrt(read² + shot² × light)`, drawn anew for every pixel, channel, frame and camera |
+  | `exposure` | the gain that brings the scene's mean light (the geometric mean of its luminance) to `target`, followed at `speed_per_s` and kept within `max_stops` either way of 1; each camera meters for itself |
+  | `motion_blur` | `shutter_s`, how long a frame gathers light: what moves across the image is smeared over the way it came in that time |
+
+  See [Stereo camera](./stereo.md#cameras-not-pinholes).
 - `model` is optional. In it, glTF's own convention holds (+Y up, the front facing +Z), and the
   simulator reads three kinds of node: `Body`, drawn where it sits; `Wheel`, centred on its axle
   at the origin with its outer face towards +X, copied to each corner; and `Cockpit_*`, the

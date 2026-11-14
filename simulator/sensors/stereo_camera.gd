@@ -31,6 +31,13 @@ func setup(vehicle: Node3D, stereo_optics: VehicleSpec.StereoOptics) -> void:
 		add_child(viewport)
 		camera.current = true
 		_hold(vehicle, camera, side)
+		if optics.looks_like_a_camera():
+			# The view is drawn as wide as the lens sees, then brought to the image's size.
+			viewport.scaling_3d_scale = optics.overscan()
+			camera.compositor = Compositor.new()
+			camera.compositor.compositor_effects = [
+				CameraEffect.new(optics, viewports.size(), _frames_per_s())
+			]
 		viewports.append(viewport)
 		cameras.append(camera)
 
@@ -70,8 +77,14 @@ static func disparity_px(stereo_optics: VehicleSpec.StereoOptics, depth_m: float
 
 
 static func calibration(stereo_optics: VehicleSpec.StereoOptics) -> Dictionary:
-	## What a recording's calib.json tells of the pair: its intrinsics and where it sits.
+	## What a recording's calib.json tells of the pair: its intrinsics, its lens's distortion
+	## and where it sits.
 	var described := intrinsics(stereo_optics)
+	var lens := stereo_optics.distortion
+	described["distortion_model"] = "OpenCV: k1, k2, p1, p2, k3"
+	described["distortion_coefficients"] = (
+		lens.coefficients() if lens != null else [0.0, 0.0, 0.0, 0.0, 0.0]
+	)
 	described["mount_m"] = LinkProtocol.to_ros(stereo_optics.mount).map(
 		func(metres): return snappedf(metres, MOUNT_PRECISION_M)
 	)
@@ -85,8 +98,10 @@ static func calibration_with_ground_truth(stereo_optics: VehicleSpec.StereoOptic
 	## `calibration`, and what the ground truth recorded with each pair holds.
 	var described := calibration(stereo_optics)
 	described["ground_truth"] = {
+		"pixels": "those of the left image, distorted as it is",
 		"depth": "float32 metres along the left camera's optical axis; 0 where there is only sky",
-		"disparity": "float32 pixels, fx * baseline_m / depth; 0 where there is only sky",
+		"disparity":
+		"float32 pixels between the rectified images, fx * baseline_m / depth; 0 where there is only sky",
 		"segmentation_classes": Segmentation.described(),
 	}
 	return described
@@ -147,7 +162,7 @@ func _on_pair_read(pair: Array[Image], frame: StereoFrame) -> void:
 func _hold(vehicle: Node3D, camera: Camera3D, side: float) -> void:
 	## Keeps `camera` on `vehicle` where the pair's camera of `side` sits, looking forward.
 	camera.keep_aspect = Camera3D.KEEP_WIDTH  # fov is horizontal
-	camera.fov = optics.hfov_deg
+	camera.fov = rad_to_deg(2.0 * atan(optics.half_extent().x * optics.overscan()))
 	camera.near = NEAR_M
 	camera.far = FAR_M
 	var holder := RemoteTransform3D.new()
@@ -155,3 +170,7 @@ func _hold(vehicle: Node3D, camera: Camera3D, side: float) -> void:
 	holder.basis = Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, -deg_to_rad(optics.pitch_deg))
 	vehicle.add_child(holder)
 	holder.remote_path = holder.get_path_to(camera)
+
+
+static func _frames_per_s() -> float:
+	return Engine.max_fps if Engine.max_fps > 0 else Engine.physics_ticks_per_second

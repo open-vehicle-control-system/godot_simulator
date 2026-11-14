@@ -1,8 +1,9 @@
 class_name GroundTruthEffect
 extends CompositorEffect
 ## Turns what the ground truth camera drew into the frame's ground truth, on the GPU: its
-## depth buffer into metres and disparity, the labels its surfaces show into class colours.
-## The three textures are read back by whoever records them.
+## depth buffer into metres and disparity, the labels its surfaces show into class colours,
+## each pixel that of the left camera's image, lens distortion included. The three textures
+## are read back by whoever records them.
 
 const SHADER_PATH := "res://sensors/shaders/ground_truth.comp"
 ## What a labelled surface writes (label.gdshaderinc): its class times the step, and the mark.
@@ -12,14 +13,16 @@ const CLASS_STEP := 16.0
 const FAINTEST_MARK := 32.0
 const GROUP_PX := 8
 const MAX_CLASSES := 16
+const NO_DISTORTION := [0.0, 0.0, 0.0, 0.0, 0.0]
 ## Push constants come in blocks of 16 bytes.
-const PUSH_CONSTANT_FLOATS := 24
+const PUSH_CONSTANT_FLOATS := 32
 
 var depth_m := RID()  ## R32F
 var disparity_px := RID()  ## R32F
 var segmentation := RID()  ## RGBA8
-var size_px := Vector2i.ZERO
+var size_px := Vector2i.ZERO  ## the image's, which the view drawn may be wider than
 
+var _optics: VehicleSpec.StereoOptics
 var _focal_px_times_baseline_m: float
 var _device: RenderingDevice
 var _shader: RID
@@ -28,18 +31,19 @@ var _sampler: RID
 var _class_colours: RID
 
 
-func _init(focal_px_times_baseline_m := 0.0) -> void:
-	_focal_px_times_baseline_m = focal_px_times_baseline_m
+func _init(optics: VehicleSpec.StereoOptics = null, focal_px := 0.0) -> void:
+	## The ground truth of the image of `optics`, whose pinhole focuses at `focal_px`.
 	effect_callback_type = EFFECT_CALLBACK_TYPE_POST_TRANSPARENT
 	_device = RenderingServer.get_rendering_device()
-	if _device == null:
+	if _device == null or optics == null:
 		return
-	var source := RDShaderSource.new()
-	source.language = RenderingDevice.SHADER_LANGUAGE_GLSL
-	source.source_compute = FileAccess.get_file_as_string(SHADER_PATH)
-	var compiled := _device.shader_compile_spirv_from_source(source)
-	assert(compiled.compile_error_compute == "", compiled.compile_error_compute)
-	_shader = _device.shader_create_from_spirv(compiled)
+	_optics = optics
+	_focal_px_times_baseline_m = focal_px * optics.baseline_m
+	size_px = Vector2i(optics.width_px, optics.height_px)
+	depth_m = _texture(RenderingDevice.DATA_FORMAT_R32_SFLOAT)
+	disparity_px = _texture(RenderingDevice.DATA_FORMAT_R32_SFLOAT)
+	segmentation = _texture(RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM)
+	_shader = ComputeShader.compile(_device, SHADER_PATH)
 	_pipeline = _device.compute_pipeline_create(_shader)
 	_sampler = _device.sampler_create(RDSamplerState.new())
 	var colours := PackedFloat32Array()
@@ -63,8 +67,6 @@ func _render_callback(_callback_type: int, render_data: RenderData) -> void:
 	var buffers := render_data.get_render_scene_buffers() as RenderSceneBuffersRD
 	if buffers == null or _device == null:
 		return
-	if buffers.get_internal_size() != size_px:
-		_create_textures(buffers.get_internal_size())
 	var uniforms: Array[RDUniform] = [
 		_sampled(0, buffers.get_depth_layer(0)),
 		_sampled(1, buffers.get_color_layer(0)),
@@ -96,19 +98,13 @@ func _camera_constants(projection: Projection) -> PackedByteArray:
 	constants.append(LABELLED_MARK / CLASS_STEP)
 	constants.append(FAINTEST_MARK)
 	constants.append(Segmentation.UNLABELLED)
+	var lens: Array = _optics.distortion.coefficients() if _optics.distortion else NO_DISTORTION
+	var half_extent := _optics.half_extent()
+	constants.append_array(lens.slice(0, 4))
+	constants.append_array([lens[4], _optics.overscan(), half_extent.x, half_extent.y])
 	constants.append(Segmentation.SKY)
 	constants.resize(PUSH_CONSTANT_FLOATS)
 	return constants.to_byte_array()
-
-
-func _create_textures(new_size_px: Vector2i) -> void:
-	for texture in [depth_m, disparity_px, segmentation]:
-		if texture.is_valid():
-			_device.free_rid(texture)
-	size_px = new_size_px
-	depth_m = _texture(RenderingDevice.DATA_FORMAT_R32_SFLOAT)
-	disparity_px = _texture(RenderingDevice.DATA_FORMAT_R32_SFLOAT)
-	segmentation = _texture(RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM)
 
 
 func _texture(format: RenderingDevice.DataFormat) -> RID:

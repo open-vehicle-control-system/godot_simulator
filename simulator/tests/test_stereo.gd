@@ -38,6 +38,53 @@ func test_calibration_gives_the_intrinsics_and_where_the_pair_sits() -> void:
 	assert_true(not calibration.has("ground_truth"))
 
 
+func test_calibration_gives_the_lens_distortion_in_opencv_order() -> void:
+	var optics := _optics(320, 180, 90.0, 0.12)
+	assert_eq(
+		StereoCamera.calibration(optics)["distortion_coefficients"], [0.0, 0.0, 0.0, 0.0, 0.0]
+	)
+	optics.distortion = LensDistortion.new([-0.2, 0.03, 0.001, -0.002, 0.004])
+
+	var calibration := StereoCamera.calibration(optics)
+
+	assert_eq(calibration["distortion_coefficients"], [-0.2, 0.03, 0.001, -0.002, 0.004])
+	assert_eq(calibration["distortion_model"], "OpenCV: k1, k2, p1, p2, k3")
+	assert_almost_eq(calibration["fx"], 160.0, 1e-4, "the focal length is the image's")
+
+
+func test_a_distorted_pair_is_drawn_as_wide_as_its_lens_sees() -> void:
+	var optics := _optics(320, 180, 90.0, 0.2)
+	optics.distortion = LensDistortion.new([-0.2, 0.03, 0.0, 0.0, 0.0])
+	var vehicle := Node3D.new()
+	add_child(vehicle)
+	var stereo := StereoCamera.new()
+	add_child(stereo)
+
+	stereo.setup(vehicle, optics)
+
+	var overscan := optics.overscan()
+	assert_almost_eq(stereo.cameras[0].fov, rad_to_deg(2.0 * atan(overscan)), 1e-4)
+	assert_almost_eq(stereo.viewports[0].scaling_3d_scale, overscan, 1e-5)
+	assert_eq(stereo.viewports[0].size, Vector2i(320, 180), "the image keeps its size")
+	assert_true(stereo.cameras[0].compositor != null)
+	vehicle.queue_free()
+	stereo.queue_free()
+
+
+func test_a_pinhole_pair_has_no_camera_effect() -> void:
+	var vehicle := Node3D.new()
+	add_child(vehicle)
+	var stereo := StereoCamera.new()
+	add_child(stereo)
+
+	stereo.setup(vehicle, _optics(320, 180, 90.0, 0.2))
+
+	assert_true(stereo.cameras[0].compositor == null)
+	assert_almost_eq(stereo.cameras[0].fov, 90.0, 1e-4)
+	vehicle.queue_free()
+	stereo.queue_free()
+
+
 func test_calibration_with_ground_truth_describes_its_maps_and_classes() -> void:
 	var calibration := StereoCamera.calibration_with_ground_truth(_optics(320, 180, 90.0, 0.12))
 
