@@ -10,7 +10,9 @@ its directory, under the licence its manifest states.
 ## Finding packs
 
 The simulator looks for packs directly under each `--packs` directory, then under `packs/`
-next to its executable, then under `user://packs`. A pack is selected by its `id`; two packs
+next to its executable, then under `user://packs`, then among the packs it bundles
+(`simulator/default_packs/`: `default_track` and `default_car`, selected when `--track` or
+`--vehicle` is left out). A pack is selected by its `id`; two packs
 with one id are both refused.
 
 ## Common fields (format 1)

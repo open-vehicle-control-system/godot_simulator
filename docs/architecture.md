@@ -285,3 +285,9 @@ draws a tile.
 
 Nothing in the simulator names a track or a vehicle. Packs are data directories found at
 runtime: see [Pack format](./pack_format.md).
+
+The simulator bundles two packs in `simulator/default_packs/` (a `.gdignore` keeps Godot from
+importing them): `default_track` and `default_car`, generated from code by
+`tools/default_packs.py` and CC0. `main.gd` searches that directory last, and
+`SimulatorOptions` selects them when `--track` or `--vehicle` is left out; nothing else in
+the simulator knows them.

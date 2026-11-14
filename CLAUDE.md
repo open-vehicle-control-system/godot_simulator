@@ -55,8 +55,8 @@ Prefer updating these docs over duplicating their content here.
 
 ## Repository notes
 
-- **The simulator ships no content.** Nothing under `simulator/` names a track or a vehicle; it takes what differs from the pack. Tests generate their own packs (`simulator/tests/pack_fixtures.gd`).
-- **Packs are data**, released on their own with their own licence: never code, never a simulator dependency. Generated pack payloads are not committed; `packs/<kind>/<id>/` holds the manifest, licence and build recipe.
+- **The simulator ships no third-party content.** Its only bundled packs are the generated defaults, `default_track` and `default_car` in `simulator/default_packs/`: CC0, built from code by `tools/default_packs.py`, committed so a clean clone runs, and rebuilt (not edited) when their builder changes. Apart from those two ids as `SimulatorOptions`' defaults, nothing under `simulator/` names a track or a vehicle; it takes what differs from the pack. Tests generate their own packs (`simulator/tests/pack_fixtures.gd`) or load the defaults.
+- **Packs are data**, released on their own with their own licence: never code, never a simulator dependency. Generated pack payloads are not committed, but for the bundled defaults; `packs/<kind>/<id>/` holds the manifest, licence and build recipe.
 - **Godot visualises.** Driving comes from OVCS over the link; keys only change the view, except under `--keyboard`, which drives with the arrow keys to look around a track without OVCS (never together with `--link`).
 - **The link's wire format is OVCS's** (`SimulatorCore.Link.Protocol`); a change to it starts in OVCS.
 - Godot 4.6. Run `./simulate.sh` (see [README.md](./README.md)).

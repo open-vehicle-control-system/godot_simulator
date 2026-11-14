@@ -2,8 +2,9 @@ extends Node3D
 ## The composition root: reads the options (see SimulatorOptions), loads the track and vehicle
 ## packs, and wires the vehicle to the OVCS link, the stereo camera, its cockpit and the viewer.
 
-## Searched after the --packs directories.
-const DEFAULT_PACK_DIRECTORIES := ["user://packs"]
+## Searched after the --packs directories, the bundled packs last: a pack anywhere with a
+## bundled pack's id is refused with it, as any two packs of one id are.
+const DEFAULT_PACK_DIRECTORIES := ["user://packs", "res://default_packs"]
 ## The VMS measures wheel speed against the wall clock: never wait on vsync, keep this rate.
 const FRAMES_PER_S := 60
 const EXIT_USAGE := 2

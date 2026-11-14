@@ -1,0 +1,435 @@
+{
+  "format": 1,
+  "kind": "track",
+  "id": "default_track",
+  "name": "Default test circuit",
+  "version": "0.1.0",
+  "licence": "CC0-1.0",
+  "attribution": [
+    "Generated from code by tools/default_packs.py: terrain, lap, surfaces, textures, trees and buildings, CC0",
+    "Road sign faces: drawn by the pack's builder (tools/sign_faces.py) after the designs of the Belgian highway code (arr\u00eat\u00e9 royal of 1 December 1975), CC0"
+  ],
+  "track": {
+    "tiles": "tiles.json",
+    "far": {
+      "scene": "far.glb",
+      "photo": "far.jpg"
+    },
+    "sun": {
+      "azimuth_deg": 135.0,
+      "elevation_deg": 42.0
+    },
+    "haze": {
+      "visibility_m": 12000.0
+    },
+    "spawn": {
+      "position_m": [
+        265.86,
+        5.36,
+        3.19
+      ],
+      "yaw_deg": 90.0
+    },
+    "ground": {
+      "layers": [
+        {
+          "textures": "textures/grass",
+          "size_m": 2.5,
+          "photo": 0.75
+        },
+        {
+          "textures": "textures/grass",
+          "size_m": 3.5,
+          "photo": 0.8
+        },
+        {
+          "textures": "textures/gravel",
+          "size_m": 2.0,
+          "photo": 0.9
+        },
+        {
+          "textures": "textures/asphalt",
+          "size_m": 2.0,
+          "photo": 1.0
+        },
+        {
+          "textures": "textures/asphalt",
+          "size_m": 3.0,
+          "photo": 1.0
+        }
+      ],
+      "slope_layer": 1,
+      "photo_grade": {
+        "black": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "gain": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "gamma": 1.0,
+        "saturation": 1.0
+      },
+      "road": {
+        "lines": "road_lines.png",
+        "lap_length_m": 1454.04,
+        "layer": 3
+      }
+    },
+    "surfaces": [
+      {
+        "materials": "M_Ground",
+        "surface": "terrain"
+      },
+      {
+        "materials": "M_Roof_clay_tiles",
+        "surface": "roof",
+        "textures": "textures/clay_tiles",
+        "size_m": 2.6
+      },
+      {
+        "materials": "M_Roof_metal",
+        "surface": "roof",
+        "textures": "textures/metal_sheet",
+        "size_m": 3.0
+      },
+      {
+        "materials": "M_Facade_plaster_0",
+        "surface": "facade",
+        "textures": "textures/plaster",
+        "size_m": 3.0,
+        "windows": "house",
+        "tint": [
+          0.97,
+          0.95,
+          0.9
+        ]
+      },
+      {
+        "materials": "M_Facade_plaster_1",
+        "surface": "facade",
+        "textures": "textures/plaster",
+        "size_m": 3.0,
+        "windows": "house",
+        "tint": [
+          0.9,
+          0.92,
+          0.95
+        ]
+      },
+      {
+        "materials": "M_Facade_brick_0",
+        "surface": "facade",
+        "textures": "textures/brick",
+        "size_m": 2.0,
+        "windows": "house",
+        "tint": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "materials": "M_Facade_metal_0",
+        "surface": "facade",
+        "textures": "textures/metal_sheet",
+        "size_m": 2.5,
+        "windows": "hall",
+        "tint": [
+          1.15,
+          1.17,
+          1.2
+        ]
+      },
+      {
+        "materials": "M_Facade_metal_1",
+        "surface": "facade",
+        "textures": "textures/metal_sheet",
+        "size_m": 2.5,
+        "windows": "hall",
+        "tint": [
+          0.8,
+          0.95,
+          1.1
+        ]
+      }
+    ],
+    "trees": {
+      "impostors": [
+        {
+          "atlas": "trees/broadleaf.dds",
+          "views": 3,
+          "width_m": 10.0,
+          "height_m": 10.0,
+          "kind": "broadleaf"
+        },
+        {
+          "atlas": "trees/conifer.dds",
+          "views": 3,
+          "width_m": 6.0,
+          "height_m": 14.0,
+          "kind": "conifer"
+        }
+      ]
+    },
+    "signs": {
+      "faces": [
+        {
+          "id": "BE:B1",
+          "image": "signs/be_b1.png",
+          "outline_m": [
+            [
+              -0.3894,
+              0.3897
+            ],
+            [
+              -0.4036,
+              0.3867
+            ],
+            [
+              -0.4154,
+              0.3781
+            ],
+            [
+              -0.4227,
+              0.3655
+            ],
+            [
+              -0.4242,
+              0.3511
+            ],
+            [
+              -0.4197,
+              0.3372
+            ],
+            [
+              -0.0303,
+              -0.3372
+            ],
+            [
+              -0.0206,
+              -0.348
+            ],
+            [
+              -0.0073,
+              -0.3539
+            ],
+            [
+              0.0073,
+              -0.3539
+            ],
+            [
+              0.0206,
+              -0.348
+            ],
+            [
+              0.0303,
+              -0.3372
+            ],
+            [
+              0.4197,
+              0.3372
+            ],
+            [
+              0.4242,
+              0.3511
+            ],
+            [
+              0.4227,
+              0.3655
+            ],
+            [
+              0.4154,
+              0.3781
+            ],
+            [
+              0.4036,
+              0.3867
+            ],
+            [
+              0.3894,
+              0.3897
+            ]
+          ]
+        },
+        {
+          "id": "BE:C43[30]",
+          "image": "signs/be_c43_30.png",
+          "outline_m": [
+            [
+              0.35,
+              0.0
+            ],
+            [
+              0.3457,
+              0.0548
+            ],
+            [
+              0.3329,
+              0.1082
+            ],
+            [
+              0.3119,
+              0.1589
+            ],
+            [
+              0.2832,
+              0.2057
+            ],
+            [
+              0.2475,
+              0.2475
+            ],
+            [
+              0.2057,
+              0.2832
+            ],
+            [
+              0.1589,
+              0.3119
+            ],
+            [
+              0.1082,
+              0.3329
+            ],
+            [
+              0.0548,
+              0.3457
+            ],
+            [
+              0.0,
+              0.35
+            ],
+            [
+              -0.0548,
+              0.3457
+            ],
+            [
+              -0.1082,
+              0.3329
+            ],
+            [
+              -0.1589,
+              0.3119
+            ],
+            [
+              -0.2057,
+              0.2832
+            ],
+            [
+              -0.2475,
+              0.2475
+            ],
+            [
+              -0.2832,
+              0.2057
+            ],
+            [
+              -0.3119,
+              0.1589
+            ],
+            [
+              -0.3329,
+              0.1082
+            ],
+            [
+              -0.3457,
+              0.0548
+            ],
+            [
+              -0.35,
+              0.0
+            ],
+            [
+              -0.3457,
+              -0.0548
+            ],
+            [
+              -0.3329,
+              -0.1082
+            ],
+            [
+              -0.3119,
+              -0.1589
+            ],
+            [
+              -0.2832,
+              -0.2057
+            ],
+            [
+              -0.2475,
+              -0.2475
+            ],
+            [
+              -0.2057,
+              -0.2832
+            ],
+            [
+              -0.1589,
+              -0.3119
+            ],
+            [
+              -0.1082,
+              -0.3329
+            ],
+            [
+              -0.0548,
+              -0.3457
+            ],
+            [
+              -0.0,
+              -0.35
+            ],
+            [
+              0.0548,
+              -0.3457
+            ],
+            [
+              0.1082,
+              -0.3329
+            ],
+            [
+              0.1589,
+              -0.3119
+            ],
+            [
+              0.2057,
+              -0.2832
+            ],
+            [
+              0.2475,
+              -0.2475
+            ],
+            [
+              0.2832,
+              -0.2057
+            ],
+            [
+              0.3119,
+              -0.1589
+            ],
+            [
+              0.3329,
+              -0.1082
+            ],
+            [
+              0.3457,
+              -0.0548
+            ]
+          ]
+        }
+      ],
+      "signal": {
+        "lens_diameter_m": 0.2,
+        "cycle_s": [
+          18.0,
+          3.0,
+          23.0
+        ]
+      }
+    }
+  }
+}

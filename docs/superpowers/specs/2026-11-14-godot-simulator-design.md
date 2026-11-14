@@ -9,12 +9,17 @@ realistic world and senses that world for it: pose, motion, IMU and a stereo cam
 Tracks and vehicles are content, released on their own schedule and under their own licences,
 apart from the simulator.
 
+The one exception is a pair of bundled defaults, so a clean clone runs with one command: a
+small test circuit and a generic compact car, generated from code alone (no external data)
+by `tools/default_packs.py`, CC0, and committed as built in `simulator/default_packs/`.
+
 ## Goals
 
 - Show a vehicle driven by OVCS over the simulator link, in Godot 4.6.
 - Report the vehicle's state and a rectified stereo pair over the link, and record pairs,
   poses and calibration to disk for offline vision work.
-- Load tracks and vehicles from packs found at runtime, none of which ship with the simulator.
+- Load tracks and vehicles from packs found at runtime; none ship with the simulator but the
+  generated, CC0 defaults.
 - Follow the OVCS development process and code rules, adapted to GDScript and Python.
 
 ## Non-goals
@@ -28,8 +33,8 @@ apart from the simulator.
 
 ## Anti-goals
 
-- Track or vehicle data in the simulator repository, or a simulator release that carries a
-  third-party licence because of its content.
+- Third-party track or vehicle data in the simulator repository, or a simulator release that
+  carries a third-party licence because of its content.
 - Hard-coded track or vehicle names in the simulator.
 - A pack format that runs code: packs are data.
 
@@ -75,7 +80,8 @@ apart from the simulator.
    `packs/` (pack sources: each pack directory carries its own manifest and licence and is
    released as its own archive), `tools/` (the Python builders that generate packs from public
    data). Generated pack payloads are not committed, only what builds them, except the tiny
-   test packs the simulator's tests load.
+   test packs the simulator's tests load and the bundled defaults (`simulator/default_packs/`,
+   CC0, small enough to sit in the repository).
 2. **One repository per pack.** Cleanest licence boundary, but a format change then spans many
    repositories while the format is still young. A pack can move to its own repository later
    without changing the format.
@@ -98,7 +104,8 @@ apart from the simulator.
 | `view/` | The views (chase, cockpit, bonnet, side, front) and the HUD |
 | `tests/` | A headless test runner and the tests |
 
-Options are command-line arguments after `--`: `--track=ID`, `--vehicle=ID`,
+Options are command-line arguments after `--`: `--track=ID`, `--vehicle=ID` (the bundled
+`default_track` and `default_car` when left out),
 `--packs=DIR` (repeatable, added to the search path), `--link=HOST:PORT`, `--camera=VIEW`,
 `--stereo-record=DIR`.
 
@@ -120,7 +127,7 @@ Options are command-line arguments after `--`: `--track=ID`, `--vehicle=ID`,
   facade) that the simulator renders with its own shader and the pack's textures.
 
 The search path is the `--packs` directories, then `packs/` next to the executable, then
-`user://packs`. A pack is looked up by its `id`; two packs with one id are an error.
+`user://packs`, then the bundled `res://default_packs`. A pack is looked up by its `id`; two packs with one id are an error.
 
 ### Link behaviour
 

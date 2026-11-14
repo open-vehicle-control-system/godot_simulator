@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Runs the simulator: ./simulate.sh --track=ID --vehicle=ID [--packs=DIR] [--link=HOST[:PORT]] ...
+# Runs the simulator: ./simulate.sh [--track=ID] [--vehicle=ID] [--packs=DIR] [--link=HOST[:PORT]] ...
+# Without --track and --vehicle it drives the bundled default packs (simulator/default_packs).
 # Options are SimulatorOptions' (simulator/simulator_options.gd).
 set -euo pipefail
 : "${GODOT:=godot}"

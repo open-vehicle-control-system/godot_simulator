@@ -2,8 +2,8 @@ class_name SimulatorOptions
 extends RefCounted
 ## The command-line options, after `--`:
 ##
-##   --track=ID              the track pack to load (required)
-##   --vehicle=ID            the vehicle pack to load (required)
+##   --track=ID              the track pack to load (default_track by default)
+##   --vehicle=ID            the vehicle pack to load (default_car by default)
 ##   --packs=DIR             a directory of packs, searched first; repeatable
 ##   --link=HOST[:PORT]      the OVCS simulator link to connect to (port 7400 by default);
 ##                           without it the vehicle stands still
@@ -34,8 +34,12 @@ extends RefCounted
 
 const DEFAULT_LINK_PORT := 7400
 
-var track := ""
-var vehicle := ""
+## The bundled packs (main.gd searches res://default_packs), so a clean clone runs as it is.
+const DEFAULT_TRACK := "default_track"
+const DEFAULT_VEHICLE := "default_car"
+
+var track := DEFAULT_TRACK
+var vehicle := DEFAULT_VEHICLE
 var pack_directories: Array[String] = []
 var link_host := ""
 var link_port := DEFAULT_LINK_PORT
@@ -72,10 +76,6 @@ static func parse(arguments: PackedStringArray) -> Dictionary:
 			problem = options._read(argument.left(separator), argument.substr(separator + 1))
 		if problem != "":
 			return {"error": problem}
-	if options.track == "":
-		return {"error": "--track is required"}
-	if options.vehicle == "":
-		return {"error": "--vehicle is required"}
 	if options.keyboard and options.link_host != "":
 		return {"error": "--keyboard and --link both drive the vehicle: choose one"}
 	if options.hold_given and (options.keyboard or options.link_host != ""):

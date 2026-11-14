@@ -8,9 +8,11 @@ claim) is in [CLAUDE.md](./CLAUDE.md#development-process).
 
 ## Layout principles
 
-- **The simulator ships no content.** `simulator/` works for any track and vehicle and takes
-  what differs from the pack: geometry, optics, spawn pose, surfaces. A track or vehicle may
-  appear in the simulator only as a test pack.
+- **The simulator ships no third-party content.** `simulator/` works for any track and
+  vehicle and takes what differs from the pack: geometry, optics, spawn pose, surfaces. Its
+  only bundled packs are the generated defaults in `simulator/default_packs/`, CC0, built from
+  code by `tools/default_packs.py`; otherwise a track or vehicle appears in the simulator only
+  as a test pack, and their ids only as `SimulatorOptions`' defaults.
 - **Packs are data.** A pack is a directory with a `pack.json` and the files it names; see
   [docs/pack_format.md](./docs/pack_format.md). Adding a pack never means editing the simulator.
 - **Builders are tools.** The Python programs that generate packs from public data live in
@@ -80,5 +82,6 @@ Run them with `mise run test` (or `./simulator/tests/run_tests.sh`); see
 ## Commits
 
 - One focused change per commit, under 400 changed lines where possible.
-- Never commit generated pack payloads, Godot's `.godot/` cache or exported builds.
+- Never commit generated pack payloads (but for the bundled defaults, rebuilt with
+  `tools/default_packs.py`), Godot's `.godot/` cache or exported builds.
 - Use `git mv` when moving files.

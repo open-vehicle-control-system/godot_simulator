@@ -52,6 +52,13 @@ func test_defaults_the_link_port_and_the_view() -> void:
 	assert_eq(options.screenshot_path, "")
 
 
+func test_defaults_to_the_bundled_track_and_vehicle() -> void:
+	var options: SimulatorOptions = SimulatorOptions.parse(PackedStringArray())["options"]
+
+	assert_eq(options.track, "default_track")
+	assert_eq(options.vehicle, "default_car")
+
+
 func test_runs_without_a_link_when_none_is_given() -> void:
 	var options: SimulatorOptions = (
 		SimulatorOptions.parse(PackedStringArray(["--track=t", "--vehicle=v"]))["options"]
@@ -62,8 +69,6 @@ func test_runs_without_a_link_when_none_is_given() -> void:
 
 func test_rejects_what_it_does_not_understand() -> void:
 	var cases := {
-		"--track is required": ["--vehicle=v"],
-		"--vehicle is required": ["--track=t"],
 		"unknown option --fly": ["--track=t", "--vehicle=v", "--fly"],
 		"--camera is one of chase, cockpit, bonnet, side, front":
 		["--track=t", "--vehicle=v", "--camera=top"],

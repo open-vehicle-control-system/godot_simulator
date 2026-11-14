@@ -22,6 +22,8 @@ Helpers:
 
 - `PackFixtures` writes small generated packs (a flat track, a box-shaped vehicle, a glTF
   model) into a fresh directory, so no test depends on a real pack.
+- The bundled default packs (`res://default_packs`) are real packs every checkout has:
+  `test_default_packs.gd` starts the simulator without options on them and drives.
 - `LinkTestServer` is OVCS's side of the link: it accepts the simulator, sends drives and
   collects what the simulator sends.
 

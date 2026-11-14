@@ -10,6 +10,8 @@ packs/**/*.jpg
 packs/**/*.height
 packs/**/*.hdr
 !simulator/tests/packs/**
+# The bundled default packs are committed as built (tools/default_packs.py).
+!simulator/default_packs/**
 .claude/*
 !.claude/settings.json
 !.claude/skills/

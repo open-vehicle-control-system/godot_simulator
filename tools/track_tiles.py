@@ -409,7 +409,7 @@ def _ros_bounds(low, high):
     ]
 
 
-def write_tile(tile, grid, directory, names):
+def write_tile(tile, grid, directory, names, ground_step_m=GROUND_STEP_M):
     """Write a tile's glb, ground heights and objects; return its index entry and its heights.
 
     `names` are the mesh names (terrain, road) of its ground. The heights are the grid's as
@@ -439,7 +439,7 @@ def write_tile(tile, grid, directory, names):
         ],
         corner_m,
         grid.tile_m,
-        GROUND_STEP_M,
+        ground_step_m,
     )
     is_ground = ~np.isnan(measured_m)
     filled_m = smooth_terrain.fill_gaps(np.nan_to_num(measured_m), is_ground)
@@ -458,13 +458,13 @@ def write_tile(tile, grid, directory, names):
 
 
 # -------------------------------------------------------------------------------------- far
-def far_mesh(measured_m, filled_m, corner_m, tile_m, photo_uv):
+def far_mesh(measured_m, filled_m, corner_m, tile_m, photo_uv, ground_step_m=GROUND_STEP_M):
     """Return a tile's coarse terrain as a primitive: its ground every FAR_STEP_M, with a rim.
 
     Only the squares whose four corners have ground are drawn. The rim hangs FAR_SKIRT_M
     down from the tile's outer edges. `photo_uv(x, z)` gives UV 0. None without any square.
     """
-    stride = round(FAR_STEP_M / GROUND_STEP_M)
+    stride = round(FAR_STEP_M / ground_step_m)
     heights_m = filled_m[::stride, ::stride]
     is_ground = ~np.isnan(measured_m[::stride, ::stride])
     count = heights_m.shape[0]
@@ -512,7 +512,7 @@ def _photo_uv(grid, mosaic, photo_rgb):
     return photo_uv
 
 
-def write_far(directory, grid, heights, mosaic, photo_rgb):
+def write_far(directory, grid, heights, mosaic, photo_rgb, ground_step_m=GROUND_STEP_M):
     """Write far.glb (a `Far_<key>` mesh per tile) and far.jpg, the whole photo, coarse.
 
     `heights` is `{cell: (measured, filled)}` as `write_tile` returns them; `photo_rgb`
@@ -523,7 +523,9 @@ def write_far(directory, grid, heights, mosaic, photo_rgb):
     photo_uv = _photo_uv(grid, mosaic, photo_rgb)
     glb = Glb()
     for cell, (measured_m, filled_m) in sorted(heights.items()):
-        mesh = far_mesh(measured_m, filled_m, grid.corner(cell), grid.tile_m, photo_uv)
+        mesh = far_mesh(
+            measured_m, filled_m, grid.corner(cell), grid.tile_m, photo_uv, ground_step_m
+        )
         if mesh is not None:
             glb.add_mesh(f"Far_{grid.key(cell)}", [mesh])
     glb.write(directory / "far.glb")
@@ -739,15 +741,26 @@ def write_canopy(directory, mosaic, photo_rgb, origin_m, trees, colours):
 
 
 # ------------------------------------------------------------------------------------ whole
-def write(world_glb, directory, mosaic, photo_rgb, origin_m, tile_m, prefixes, trees, placed):
+def write(
+    world_glb,
+    directory,
+    mosaic,
+    photo_rgb,
+    origin_m,
+    tile_m,
+    prefixes,
+    trees,
+    placed,
+    ground_step_m=GROUND_STEP_M,
+):
     """Write a pack's tiles, tiles.json and far terrain into `directory` from its whole world.
 
     `photo_rgb` is the photo the ground is drawn with, covering the ground `mosaic` does;
     `origin_m` is the map's (east, north) at the world's origin, `prefixes` the mesh name
     prefixes of the terrain and of the road, `trees` the pack's trees by kind and `placed`
     its posts, plates, signals and decals, in the pack's ROS frame. The ground maps of the
-    tiles that hold no ground are removed. Returns how many trees, sign parts and decals
-    stand on no tile.
+    tiles that hold no ground are removed. The ground's heights are sampled every
+    `ground_step_m`. Returns how many trees, sign parts and decals stand on no tile.
     """
     grid = TileGrid(mosaic.west - origin_m[0], -(mosaic.north - origin_m[1]), tile_m, origin_m)
     tiles = {
@@ -765,7 +778,9 @@ def write(world_glb, directory, mosaic, photo_rgb, origin_m, tile_m, prefixes, t
             stale.unlink()
     index, heights = [], {}
     for cell, tile in sorted(tiles.items()):
-        entry, measured_m, filled_m = write_tile(tile, grid, tile_directory, prefixes)
+        entry, measured_m, filled_m = write_tile(
+            tile, grid, tile_directory, prefixes, ground_step_m
+        )
         key = entry["key"]
         entry["maps"] = [
             kind
@@ -779,7 +794,7 @@ def write(world_glb, directory, mosaic, photo_rgb, origin_m, tile_m, prefixes, t
             tile_directory / f"{key}.photo.jpg", quality=PHOTO_JPEG_QUALITY, subsampling=0
         )
     (directory / "tiles.json").write_text(
-        json.dumps({"tile_size_m": tile_m, "ground_step_m": GROUND_STEP_M, "tiles": index})
+        json.dumps({"tile_size_m": tile_m, "ground_step_m": ground_step_m, "tiles": index})
     )
-    write_far(directory, grid, heights, mosaic, photo_rgb)
+    write_far(directory, grid, heights, mosaic, photo_rgb, ground_step_m)
     return homeless
