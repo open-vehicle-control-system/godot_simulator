@@ -415,6 +415,11 @@ texture.
   casts a tree's shadow from the silhouette of its cards, cut into rectangles from the atlas's
   alpha; the cards cast none. Anything else drawn by the thousand with a cut-out texture gets
   the same treatment.
+- **A cut-out does not reflect the sky** (`SPECULAR = 0.0`). Godot looks the sky's radiance up
+  with implicit screen-space derivatives, which are undefined beside a pixel the alpha scissor
+  discards: the cards' edges changed by 1/255 from frame to frame, a few hundred pixels in every
+  viewport, so no two stereo frames of a still view were identical. Leaves at that scale
+  reflect nothing visible anyway. `tests/rendered/test_still_view.gd` guards it.
 - **Trees are batched by cluster**, 64 m wide, per impostor: what is behind the camera, beyond
   the draw distance or outside a shadow cascade is not sent to the GPU.
 - **Each kind of thing has a draw distance and fades at its end**, never pops. Trees are drawn
@@ -491,6 +496,9 @@ texture.
   the worst defects. Run it on the untouched pack first and after every change to a fit, an
   encoding or the terrain shader; a line is done when the audit is clean or every defect left
   is explained.
+- **A still view draws the same pixels every frame.** Stand still in the woods with
+  `--hold=0,0 --stereo-record=DIR` and compare the last frames: any pixel that changes is a
+  shader reading gradients beside a discard or a branch (see Terrain and Trees above).
 - **Look from above too.** A high view over the area shows what the road hides: patches under
   lone trees, smeared photo around buildings and in car parks, roofs that do not match the photo.
 - **Measure the frame time** at 1080p; the budget is 16.7 ms per frame for everything.

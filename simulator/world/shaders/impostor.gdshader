@@ -26,7 +26,9 @@ void fragment() {
 	ALPHA_ANTIALIASING_EDGE = 0.3;
 	ALPHA_TEXTURE_COORDINATE = UV * vec2(textureSize(atlas, 0));
 	ROUGHNESS = 1.0;
-	SPECULAR = 0.1;
+	// No sky reflection: Godot looks the sky's radiance up with implicit derivatives, which are
+	// undefined beside a pixel the alpha scissor discards, so the edges would flicker.
+	SPECULAR = 0.0;
 	// Cards lit as a crown is: from above, and with the light that passes through the leaves.
 	NORMAL = normalize(mix(NORMAL, (VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz, 0.55));
 	BACKLIGHT = vec3(0.25, 0.3, 0.2);

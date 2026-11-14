@@ -1,9 +1,10 @@
 ---
 id: TASK-33
 title: Find why tree cards flicker between frames
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-14 21:46'
+updated_date: '2026-11-14 22:30'
 labels: []
 dependencies: []
 ordinal: 33000
