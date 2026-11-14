@@ -67,8 +67,13 @@ bicycle model about the rear axle, and rests on the ground under its four wheels
 each wheel finds its contact, the body follows the plane through them (pitch and roll), and each
 wheel rises or drops within a short suspension travel to touch its own contact. Its state
 (velocity, IMU) is the origin's, which turns about the same point as the rear axle. With no
-drive for half a second, or no link, it is commanded to stop. There is no tyre or suspension
-model.
+drive for half a second, or no link, it is commanded to stop.
+
+Tyres grip only so much: the vehicle never corners harder than the pack's
+`max_lateral_acceleration_m_s2`. Steered beyond it, the front wheels stay turned but the vehicle
+turns only as tight as the grip allows and runs wide (understeer); the yaw rate and the IMU it
+reports show that, as a real vehicle's would. There is no tyre slip model beyond this limit, no
+weight transfer and no suspension dynamics: a vehicle moved by its own forces is OVCS's TASK-81.
 
 The vehicle does not pass through what it hits. Before every move its body box (raised off the
 ground so kerbs and bumps never stop it) is swept along the move; if the track's collision is in

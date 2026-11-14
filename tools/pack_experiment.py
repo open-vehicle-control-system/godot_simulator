@@ -589,6 +589,10 @@ def gltf_material_names(model):
     return [material.get("name", "") for material in document.get("materials", [])]
 
 
+# Road tyres on dry asphalt hold about 0.8 g sideways; OVCS1 runs eco tyres.
+LATERAL_GRIP_M_S2 = {"ovcs1": 7.8, "ovcs_mini": 8.0}
+
+
 def vehicle_pack(experiment, vehicle_id, licence, attribution):
     """Return the manifest of a vehicle profile and the files it links to."""
     cars = experiment / "data" / "cars"
@@ -617,6 +621,7 @@ def vehicle_pack(experiment, vehicle_id, licence, attribution):
         "rear_track_m": profile["track_rear"],
         "wheel_radius_m": profile["wheel_radius"],
         "wheel_width_m": profile["wheel_width"],
+        "max_lateral_acceleration_m_s2": LATERAL_GRIP_M_S2[vehicle_id],
         "body": {"size_m": ros(body), "centre_m": ros(body_centre)},
         "driver_eye_m": ros(profile["driver_eye"]),
         "driver_pitch_deg": profile.get("driver_pitch_deg", 0.0),

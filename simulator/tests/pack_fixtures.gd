@@ -31,6 +31,7 @@ static func vehicle_manifest(id: String) -> Dictionary:
 			"rear_track_m": 1.4,
 			"wheel_radius_m": 0.3,
 			"wheel_width_m": 0.2,
+			"max_lateral_acceleration_m_s2": 8.0,
 			"body": {"size_m": [3.9, 1.6, 1.0], "centre_m": [0.0, 0.0, 0.85]},
 			"driver_eye_m": [-0.2, 0.38, 1.1],
 			"driver_pitch_deg": -3.0,

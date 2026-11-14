@@ -29,6 +29,7 @@ var front_track_m: float
 var rear_track_m: float
 var wheel_radius_m: float
 var wheel_width_m: float
+var max_lateral_acceleration_m_s2: float  ## the tyres' grip: the hardest the vehicle corners
 var body_size: Vector3
 var body_centre: Vector3
 var driver_eye: Vector3
@@ -54,6 +55,7 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 	spec.rear_track_m = reader.positive("vehicle.rear_track_m")
 	spec.wheel_radius_m = reader.positive("vehicle.wheel_radius_m")
 	spec.wheel_width_m = reader.positive("vehicle.wheel_width_m")
+	spec.max_lateral_acceleration_m_s2 = reader.positive("vehicle.max_lateral_acceleration_m_s2")
 	spec.body_size = reader.ros_vector("vehicle.body.size_m")
 	spec.body_centre = reader.ros_vector("vehicle.body.centre_m")
 	spec.driver_eye = reader.ros_vector("vehicle.driver_eye_m")

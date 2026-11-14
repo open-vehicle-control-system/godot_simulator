@@ -95,10 +95,13 @@ func _physics_process(delta: float) -> void:
 	speed_m_s = _commanded_speed_m_s
 	steering_rad = _commanded_steering_rad
 	var rear_axle := global_position + BicycleModel.heading(_yaw_rad) * spec.rear_axle_z
+	var turning_rad := BicycleModel.grip_limited_steering(
+		steering_rad, speed_m_s, spec.wheelbase_m(), spec.max_lateral_acceleration_m_s2
+	)
 	var motion := BicycleModel.advance(
 		{"rear_axle": rear_axle, "yaw_rad": _yaw_rad},
 		speed_m_s,
-		steering_rad,
+		turning_rad,
 		spec.wheelbase_m(),
 		delta
 	)

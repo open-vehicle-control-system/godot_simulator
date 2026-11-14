@@ -50,6 +50,7 @@ for a vehicle; x, y, z up for a world.
   "rear_track_m": 1.396,
   "wheel_radius_m": 0.296,
   "wheel_width_m": 0.2,
+  "max_lateral_acceleration_m_s2": 7.8,
   "body": {"size_m": [3.85, 1.62, 1.05], "centre_m": [0.0, 0.0, 0.85]},
   "driver_eye_m": [-0.178, 0.381, 1.106],
   "driver_pitch_deg": -2.82,
@@ -76,6 +77,8 @@ for a vehicle; x, y, z up for a world.
 ```
 
 - The origin is on the ground; axle positions are along x.
+- `max_lateral_acceleration_m_s2` is the tyres' grip: the vehicle never corners harder than
+  this; steered beyond it, it runs wide. Road tyres on dry asphalt hold about 0.8 g.
 - `body` is a box: the placeholder drawn when there is no `model`.
 - Lengths, the wheel radius, the stereo resolution, baseline and rate are positive, the field of
   view under 180°, and the front axle ahead of the rear one; a pack that breaks this is refused.

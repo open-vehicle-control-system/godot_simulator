@@ -84,16 +84,16 @@ func test_reports_the_motion_of_its_origin_ahead_of_the_rear_axle() -> void:
 	var vehicle := await _vehicle_on_flat_track("turning_state", Vector3.ZERO)
 	var steering_rad := 0.3
 
-	vehicle.command(10.0, steering_rad)
+	vehicle.command(5.0, steering_rad)
 	await wait_physics_frames(10)
 	var state := vehicle.motion_state()
 
 	# The fixture's origin is 1.3 m ahead of the rear axle.
-	var yaw_rate := 10.0 * tan(steering_rad) / 2.5
+	var yaw_rate := 5.0 * tan(steering_rad) / 2.5
 	assert_almost_eq(vehicle.yaw_rate_rad_s, yaw_rate, 1e-5)
-	assert_almost_eq(state["linear_velocity_m_s"], Vector3(1.3 * yaw_rate, 0.0, 10.0), 1e-4)
+	assert_almost_eq(state["linear_velocity_m_s"], Vector3(1.3 * yaw_rate, 0.0, 5.0), 1e-4)
 	var expected_acceleration := Vector3(
-		10.0 * yaw_rate, Vehicle.GRAVITY_M_S2, -1.3 * yaw_rate * yaw_rate
+		5.0 * yaw_rate, Vehicle.GRAVITY_M_S2, -1.3 * yaw_rate * yaw_rate
 	)
 	assert_almost_eq(state["linear_acceleration_m_s2"], expected_acceleration, 1e-3)
 
