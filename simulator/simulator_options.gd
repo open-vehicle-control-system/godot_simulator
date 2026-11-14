@@ -15,6 +15,13 @@ extends RefCounted
 ##   --stereo-record=DIR     record stereo pairs, poses and calibration into DIR
 ##   --ground-truth          with --stereo-record, record each pair's depth, disparity and
 ##                           segmentation too
+##   --record=DIR            record the stereo pair and its ground truth into DIR frame by
+##                           frame at a fixed simulated rate, so that two runs record the
+##                           same: needs Godot's --fixed-fps, which simulate.sh passes
+##   --record-seconds=S      how long --record lasts, in simulated seconds (the length of the
+##                           drive log when left out), after which the simulator quits
+##   --drive-log=FILE        drive as this CSV tells over time instead, without OVCS: columns
+##                           time_s, speed_m_s, steering_rad, as a recording's poses.csv
 ##   --show-stereo           show the stereo pair at start (V toggles it)
 ##   --spawn=X,Y,Z,YAW_DEG   start there instead of at the track's spawn: metres and degrees in
 ##                           the track's frame, as `spawn` in its pack.json
@@ -33,6 +40,9 @@ var link_port := DEFAULT_LINK_PORT
 var view := "chase"
 var stereo_record_directory := ""
 var ground_truth := false
+var record_directory := ""
+var record_s := 0.0  ## 0: as long as the drive log
+var drive_log_path := ""
 var show_stereo := false
 var keyboard := false
 var hold_given := false
@@ -69,7 +79,42 @@ static func parse(arguments: PackedStringArray) -> Dictionary:
 		return {"error": "--hold drives the vehicle: not with --keyboard or --link"}
 	if options.ground_truth and options.stereo_record_directory == "":
 		return {"error": "--ground-truth is recorded: it needs --stereo-record"}
+	var problem := options._what_is_wrong_with_recording()
+	if problem != "":
+		return {"error": problem}
 	return {"options": options}
+
+
+func recording_directory() -> String:
+	## Where the stereo pair is recorded, or "" when it is not.
+	return record_directory if record_directory != "" else stereo_record_directory
+
+
+func records_ground_truth() -> bool:
+	## True when the pair's ground truth is recorded with it.
+	return ground_truth or record_directory != ""
+
+
+func _what_is_wrong_with_recording() -> String:
+	var driven_otherwise := keyboard or link_host != ""
+	var recording := record_directory != ""
+	# What must not be, and why, most telling first.
+	var refused := {
+		"--drive-log drives the vehicle: not with --hold, --keyboard or --link":
+		drive_log_path != "" and (hold_given or driven_otherwise),
+		"--record-seconds is how long --record lasts: it needs --record":
+		not recording and record_s > 0.0,
+		"--record runs at its own pace: not with --link or --keyboard":
+		recording and driven_otherwise,
+		"--record records the pair and its ground truth: not with --stereo-record":
+		recording and stereo_record_directory != "",
+		"--record is as long as --record-seconds or a --drive-log":
+		recording and record_s <= 0.0 and drive_log_path == "",
+	}
+	for problem: String in refused:
+		if refused[problem]:
+			return problem
+	return ""
 
 
 func _read(option: String, argument: String) -> String:
@@ -88,9 +133,13 @@ func _read(option: String, argument: String) -> String:
 			view = argument
 		"--stereo-record":
 			stereo_record_directory = argument
+		"--record":
+			record_directory = argument
+		"--drive-log":
+			drive_log_path = argument
 		"--show-stereo":
 			return "--show-stereo takes no value"
-		"--spawn", "--eye", "--hold":
+		"--spawn", "--eye", "--hold", "--record-seconds":
 			return _read_numbers(option, argument)
 		"--screenshot":
 			screenshot_path = argument
@@ -130,7 +179,16 @@ func _read_numbers(option: String, argument: String) -> String:
 			return _read_spawn(argument)
 		"--eye":
 			return _read_eye(argument)
+		"--record-seconds":
+			return _read_record_seconds(argument)
 	return _read_hold(argument)
+
+
+func _read_record_seconds(seconds: String) -> String:
+	if not seconds.is_valid_float() or seconds.to_float() <= 0.0:
+		return "--record-seconds is a positive number"
+	record_s = seconds.to_float()
+	return ""
 
 
 func _read_spawn(pose: String) -> String:

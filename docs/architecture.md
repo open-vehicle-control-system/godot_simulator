@@ -53,6 +53,9 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `sensors/camera_effect.gd`, `sensors/shaders/camera.comp` | What makes a stereo camera's view the image of a camera: distortion, motion blur, vignetting, noise, exposure ([Stereo camera](./stereo.md#cameras-not-pinholes)) |
 | `sensors/compute_shader.gd` | Compiles the compute shaders, with their includes |
 | `sensors/stereo_sender.gd`, `sensors/stereo_recorder.gd` | Pairs to the link, frames to disk |
+| `sensors/gpu_readback.gd` | Reads textures back from the GPU a few frames later, all of them before the simulator quits |
+| `vehicle/drive_log.gd`, `vehicle/drive_log_driver.gd` | A drive over time read from a CSV, and the vehicle driven by it (`--drive-log`) |
+| `world/tiles_at_once.gd` | Every tile around the vehicle in the scene before each frame, for a repeatable recording (`--record`) |
 | `sensors/stereo_frame.gd`, `sensors/numpy_file.gd` | What the camera shows of one frame; a float map as a `.npy` file |
 | `sensors/segmentation.gd`, `sensors/shaders/label.gdshader`, `label.gdshaderinc` | The segmentation classes, and how a surface shows its class to the ground truth camera |
 | `sensors/ground_truth_camera.gd`, `sensors/ground_truth_effect.gd`, `sensors/shaders/ground_truth.comp` | The left camera's view as depth, disparity and segmentation ([Stereo camera](./stereo.md#ground-truth)) |
@@ -145,20 +148,6 @@ primitives of a frame.
 Every viewport renders its own shadow maps, so what casts a shadow is drawn four times more
 per viewport; with the stereo pair that is three viewports.
 
-## Screen-space light
-
-The window, and only the window, is lit by what its own picture shows
-(`TrackWorld.window_lighting`): screen-space indirect light, at the engine's medium quality
-and half resolution, as strong as the pack's `indirect_light` asks. It costs the window 0.3 ms
-a frame on the GPU (at Spa's heaviest view the three viewports take 13.9 ms without it and
-14.2 ms with it, frame cap lifted), and darkens what is under a roof, a stand or the vehicle.
-The stereo cameras and the mirrors see the world's own lighting, without it: in their images
-it drew thin outlines around trees against a hill.
-
-Screen-space reflections are off everywhere: 0.4 ms over the three viewports, and nothing in
-the packs is wet or polished enough to show them but the vehicle's paint and a few windows,
-while grass verges seen at a grazing angle came out speckled.
-
 - **Near**, a tree is crossed cards cut out by its impostor's atlas, in a batch per impostor
   and 64 m cluster, so batches behind the camera or out of range are culled.
 - **Its shadow** is cast by another batch of the same cluster: the cards' silhouette as
@@ -172,6 +161,20 @@ while grass verges seen at a grazing angle came out speckled.
   Near the camera it lies under the ground; it rises to the crowns over the distance before
   the trees start to shrink.
 - **Haze** is exponential fog in the sky's colour, its density from the pack's visibility.
+
+## Screen-space light
+
+The window, and only the window, is lit by what its own picture shows
+(`TrackWorld.window_lighting`): screen-space indirect light, at the engine's medium quality
+and half resolution, as strong as the pack's `indirect_light` asks. It costs the window 0.3 ms
+a frame on the GPU (at Spa's heaviest view the three viewports take 13.9 ms without it and
+14.2 ms with it, frame cap lifted), and darkens what is under a roof, a stand or the vehicle.
+The stereo cameras and the mirrors see the world's own lighting, without it: in their images
+it drew thin outlines around trees against a hill.
+
+Screen-space reflections are off everywhere: 0.4 ms over the three viewports, and nothing in
+the packs is wet or polished enough to show them but the vehicle's paint and a few windows,
+while grass verges seen at a grazing angle came out speckled.
 
 ## The cockpit
 

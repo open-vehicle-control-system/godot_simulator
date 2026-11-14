@@ -39,10 +39,9 @@ func draw_next_frame() -> void:
 
 func read_into(frame: StereoFrame) -> void:
 	## Reads the ground truth drawn last into `frame`, a few frames from now: three parts.
-	var device := RenderingServer.get_rendering_device()
-	device.texture_get_data_async(_effect.depth_m, 0, _on_map_read.bind("depth", frame))
-	device.texture_get_data_async(_effect.disparity_px, 0, _on_map_read.bind("disparity", frame))
-	device.texture_get_data_async(_effect.segmentation, 0, _on_segmentation_read.bind(frame))
+	GpuReadback.read(_effect.depth_m, _on_map_read.bind("depth", frame))
+	GpuReadback.read(_effect.disparity_px, _on_map_read.bind("disparity", frame))
+	GpuReadback.read(_effect.segmentation, _on_segmentation_read.bind(frame))
 
 
 func _on_map_read(floats: PackedByteArray, map: String, frame: StereoFrame) -> void:

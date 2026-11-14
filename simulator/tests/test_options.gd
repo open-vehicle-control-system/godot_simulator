@@ -155,3 +155,50 @@ func test_ground_truth_is_recorded_with_the_stereo_pair() -> void:
 		SimulatorOptions.parse(PackedStringArray(["--track=t", "--vehicle=v", "--ground-truth"])),
 		{"error": "--ground-truth is recorded: it needs --stereo-record"}
 	)
+
+
+func test_record_takes_a_directory_and_how_long_to_record() -> void:
+	var options: SimulatorOptions = (
+		SimulatorOptions
+		. parse(
+			PackedStringArray(
+				[
+					"--track=t",
+					"--vehicle=v",
+					"--record=/tmp/run",
+					"--record-seconds=2.5",
+					"--hold=30,0"
+				]
+			)
+		)["options"]
+	)
+
+	assert_eq(options.record_directory, "/tmp/run")
+	assert_eq(options.record_s, 2.5)
+
+
+func test_a_drive_log_drives_the_vehicle() -> void:
+	var options: SimulatorOptions = (
+		SimulatorOptions
+		. parse(PackedStringArray(["--track=t", "--vehicle=v", "--drive-log=/tmp/poses.csv"]))["options"]
+	)
+
+	assert_eq(options.drive_log_path, "/tmp/poses.csv")
+
+
+func test_record_and_drive_log_are_refused_with_what_they_cannot_go_with() -> void:
+	var cases := {
+		"--record is as long as --record-seconds or a --drive-log":
+		["--record=/tmp/run", "--hold=30,0"],
+		"--record-seconds is a positive number": ["--record=/tmp/run", "--record-seconds=soon"],
+		"--record runs at its own pace: not with --link or --keyboard":
+		["--record=/tmp/run", "--record-seconds=1", "--link=localhost"],
+		"--record records the pair and its ground truth: not with --stereo-record":
+		["--record=/tmp/run", "--record-seconds=1", "--stereo-record=/tmp/other"],
+		"--record-seconds is how long --record lasts: it needs --record": ["--record-seconds=1"],
+		"--drive-log drives the vehicle: not with --hold, --keyboard or --link":
+		["--drive-log=/tmp/poses.csv", "--hold=30,0"],
+	}
+	for problem in cases:
+		var arguments := PackedStringArray(["--track=t", "--vehicle=v"] + cases[problem])
+		assert_eq(SimulatorOptions.parse(arguments), {"error": problem})

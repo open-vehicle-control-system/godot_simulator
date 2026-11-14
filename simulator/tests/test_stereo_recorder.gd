@@ -77,6 +77,45 @@ func test_a_frame_handed_over_later_is_recorded_with_the_pose_it_was_asked_at() 
 	assert_almost_eq(rows[1].split(",")[3].to_float(), 0.0, 1e-3, "y_m: Godot's x")
 
 
+func test_ends_once_the_frames_of_its_duration_are_on_disk() -> void:
+	var directory := PackFixtures.fresh_directory("recording_ends")
+	var vehicle := _vehicle(directory)
+	var recording := directory.path_join("run")
+	var recorder := StereoRecorder.new()
+	add_child(recorder)
+	var asked: Array[Callable] = []
+	var ended := []
+	recorder.ended.connect(func(): ended.append(_files(recording.path_join("left")).size()))
+
+	recorder.setup(recording, vehicle, 10.0, {}, func(deliver): asked.append(deliver))
+	recorder.end_after(0.35)
+	await wait_physics_frames(60)
+
+	assert_eq(asked.size(), 4, "frames at 0.02, 0.1, 0.2 and 0.3 s")
+	assert_eq(ended, [], "ended before its frames were handed over")
+	for deliver in asked:
+		deliver.call(_pair())
+	await wait_physics_frames(2)
+	assert_eq(ended, [4], "ended once, its four frames written")
+
+
+func test_recording_every_frame_waits_for_the_writers_instead_of_skipping() -> void:
+	var directory := PackFixtures.fresh_directory("recording_every_frame")
+	var vehicle := _vehicle(directory)
+	var recording := directory.path_join("run")
+	var recorder := StereoRecorder.new()
+	add_child(recorder)
+
+	recorder.setup(recording, vehicle, 60.0, {}, _hand_over_a_pair)
+	recorder.record_every_frame()
+	recorder.max_files_being_written = 1
+	await wait_physics_frames(20)
+	recorder.finish()
+
+	assert_eq(_files(recording.path_join("left")).size(), 19)
+	assert_eq(_files(recording.path_join("right")).size(), 19)
+
+
 func test_reports_a_directory_it_cannot_write() -> void:
 	var directory := PackFixtures.fresh_directory("unwritable")
 	FileAccess.open(directory.path_join("taken"), FileAccess.WRITE).store_string("a file")

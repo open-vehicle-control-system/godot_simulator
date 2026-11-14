@@ -72,6 +72,37 @@ four are writing, the frame due is skipped rather than the simulation held back,
 recorder tells how many were when it ends. Rows of `poses.csv` and files are numbered alike,
 without gaps.
 
+## Recording the same twice
+
+`--record=DIR` records the pair and its ground truth so that two runs record the same, and
+quits when done:
+
+```sh
+./simulate.sh --track=spa --vehicle=ovcs1 --hold=100,2 --record=runs/spa_a --record-seconds=20
+./simulate.sh --track=spa --vehicle=ovcs1 --drive-log=runs/lap/poses.csv --record=runs/spa_b
+```
+
+- `simulate.sh` starts Godot in its movie mode (`--write-movie DIR/window.avi --fixed-fps 60`):
+  simulated time advances by one sixtieth of a second a frame, one physics step each,
+  whatever the wall clock says. A frame may take as long as it needs, so a recording can use
+  what real time cannot hold: a larger pair, sensor noise, a slow disk. `DIR/window.avi` is
+  what the window showed, at 640 × 360.
+- The vehicle is driven by `--hold`, or by `--drive-log=FILE`: a CSV whose header names
+  `time_s`, `speed_m_s` and `steering_rad` among its columns, each row a drive held until
+  the next one's time. The `poses.csv` of a recording is one, so a drive OVCS made over the
+  link, recorded with `--stereo-record`, is replayed from its poses. It lasts
+  `--record-seconds`, or as long as the drive log.
+- Every tile within the streaming radius is loaded before a frame is drawn, instead of over
+  the following frames, and no frame is skipped: writing holds the simulation back.
+- Two runs write the same `poses.csv`, `calib.json`, depth and disparity, byte for byte, and
+  the same segmentation but, on a real track, for one frame in fifty or so, where a few
+  pixels (four or eight) of a building or a wall are `unlabelled` in one run: not explained
+  yet (TASK-32). The left and right images are the same but for the last bit of a few pixels
+  (ten or so of a 1280 × 720 frame, more in the first frames), which the renderer does not
+  promise; sensor noise, exposure and motion blur are the same in both runs.
+- Five simulated seconds of Mettet with a 1280 × 720 pair, its ground truth and every camera
+  effect take 18 s (Radeon RX 7800 XT), the first second loading the tiles around the start.
+
 ## Ground truth
 
 The ground truth is of the left image, pixel for pixel, lens distortion included, from what

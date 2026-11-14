@@ -30,7 +30,7 @@ func _ready() -> void:
 	var track: TrackSpec = track_found["track"]
 	if options.spawn_given:
 		track.move_spawn(options.spawn_position_m, options.spawn_yaw_deg)
-	track.labelled = options.ground_truth
+	track.labelled = options.records_ground_truth()
 	var problem := _build(options, track, vehicle_found["vehicle"])
 	if problem != "":
 		_quit_with(problem)
@@ -88,10 +88,9 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 		var driver := KeyboardDriver.new()
 		add_child(driver)
 		driver.setup(vehicle)
-	if options.stereo_record_directory != "":
-		var problem := _record(options, vehicle, stereo)
-		if problem != "":
-			return problem
+	var recording_problem := _drive_from_a_log_and_record(options, vehicle, stereo, tiles)
+	if recording_problem != "":
+		return recording_problem
 	var viewer := Viewer.new()
 	viewer.keyboard_driving = options.keyboard
 	viewer.holding_drive = options.hold_given
@@ -118,26 +117,70 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 		var problem := viewer.mirrors.setup(spec, model.body, lighting["environment"])
 		if problem != "":
 			return problem
-	if options.ground_truth:
+	if options.records_ground_truth():
 		Segmentation.label_under(vehicle, Segmentation.VEHICLE)
 	return ""
 
 
-func _record(options: SimulatorOptions, vehicle: Vehicle, stereo: StereoCamera) -> String:
-	## Records the stereo pair as the options tell; returns why it cannot, or "".
-	if options.ground_truth:
+func _drive_from_a_log_and_record(
+	options: SimulatorOptions, vehicle: Vehicle, stereo: StereoCamera, tiles: TrackTiles
+) -> String:
+	## Drives the vehicle from the drive log and records the stereo pair, as far as the
+	## options ask for either; returns why it cannot, or "".
+	var drive_log_s := 0.0
+	if options.drive_log_path != "":
+		var found := DriveLog.parse(FileAccess.get_file_as_string(options.drive_log_path))
+		if found.has("error"):
+			return "--drive-log %s: %s" % [options.drive_log_path, found["error"]]
+		var driver := DriveLogDriver.new()
+		add_child(driver)
+		driver.setup(vehicle, found["log"])
+		drive_log_s = found["log"].duration_s()
+	if options.recording_directory() == "":
+		return ""
+	var recorder := StereoRecorder.new()
+	add_child(recorder)
+	var problem := _record(options, recorder, vehicle, stereo)
+	if problem == "" and options.record_directory != "":
+		var record_s := options.record_s if options.record_s > 0.0 else drive_log_s
+		problem = _record_frame_by_frame(recorder, record_s, tiles, vehicle)
+	return problem
+
+
+func _record(
+	options: SimulatorOptions, recorder: StereoRecorder, vehicle: Vehicle, stereo: StereoCamera
+) -> String:
+	## Records the stereo pair with `recorder` as the options tell; returns why it cannot,
+	## or "".
+	if options.records_ground_truth():
 		var problem := stereo.add_ground_truth(vehicle)
 		if problem != "":
 			return problem
-	var recorder := StereoRecorder.new()
-	add_child(recorder)
 	return recorder.setup(
-		options.stereo_record_directory,
+		options.recording_directory(),
 		vehicle,
 		stereo.optics.rate_hz,
 		stereo.described(),
 		stereo.request_next_frame
 	)
+
+
+func _record_frame_by_frame(
+	recorder: StereoRecorder, record_s: float, tiles: TrackTiles, vehicle: Vehicle
+) -> String:
+	## Makes `recorder`'s recording the same run after run, for `record_s` simulated seconds,
+	## then quits: Godot's movie mode steps simulated time by one frame at a time, each is
+	## drawn with all its tiles and recorded however long that takes. Returns why it cannot,
+	## or "".
+	if not OS.has_feature("movie"):
+		return "--record needs Godot's movie mode (--write-movie), which simulate.sh starts"
+	var at_once := TilesAtOnce.new()
+	add_child(at_once)
+	at_once.setup(tiles, vehicle)
+	recorder.record_every_frame()
+	recorder.end_after(record_s)
+	recorder.ended.connect(get_tree().quit)
+	return ""
 
 
 static func _read_model_into(read: Dictionary, spec: VehicleSpec) -> void:

@@ -118,6 +118,8 @@ func request_next_frame(deliver: Callable) -> void:
 	if _ground_truth != null:
 		_ground_truth.draw_next_frame()
 	await RenderingServer.frame_post_draw
+	if not is_inside_tree():
+		return  # the simulator is quitting: its viewports are gone
 	var frame := StereoFrame.new(viewports[0].size)
 	frame.deliver_after(1 if _ground_truth == null else 4, deliver)
 	if _ground_truth != null:
@@ -136,7 +138,7 @@ func request_pair(deliver: Callable) -> void:
 	var pair: Array[Image] = [null, null]
 	for side in viewports.size():
 		var drawn := RenderingServer.texture_get_rd_texture(viewports[side].get_texture().get_rid())
-		device.texture_get_data_async(drawn, 0, _on_read_back.bind(side, pair, deliver))
+		GpuReadback.read(drawn, _on_read_back.bind(side, pair, deliver))
 
 
 func capture() -> Array[Image]:
@@ -151,6 +153,10 @@ func _on_read_back(
 	pair[side] = Image.create_from_data(size.x, size.y, false, Image.FORMAT_RGBA8, pixels)
 	if pair[0] != null and pair[1] != null and deliver.is_valid():
 		deliver.call(pair)
+
+
+func _exit_tree() -> void:
+	GpuReadback.finish_all()
 
 
 func _on_pair_read(pair: Array[Image], frame: StereoFrame) -> void:

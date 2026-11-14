@@ -5,15 +5,22 @@ extends Node
 ## depth/NNNNNN.npy, disparity/NNNNNN.npy), a row of poses.csv per frame, and calib.json.
 ## Poses are the vehicle's base_link in the world, in ROS frames as the link reports them.
 
+## Emitted once the frames of `end_after`'s duration are on disk.
+signal ended
+
 const POSES_HEADER := "frame,time_s,x_m,y_m,z_m,qx,qy,qz,qw,speed_m_s,steering_rad"
 ## The processor's threads left to the simulation while files are written, one a thread: a
 ## frame handed over while every other thread writes is not recorded, so a disk or encoder
 ## slower than the camera never holds the simulation back.
 const THREADS_KEPT_FREE := 4
 const MIN_FILES_BEING_WRITTEN := 4
-
 ## Low priority tasks share a few of the pool's threads: too few to encode at the camera's rate.
 const HIGH_PRIORITY := true
+
+## The files written at once, one a thread.
+var max_files_being_written := maxi(
+	MIN_FILES_BEING_WRITTEN, OS.get_processor_count() - THREADS_KEPT_FREE
+)
 
 var _directory: String
 var _vehicle: Vehicle
@@ -27,9 +34,9 @@ var _poses: FileAccess
 var _writing_tasks: Array[int] = []
 var _directories_made := {}
 var _frames_skipped := 0
-var _max_files_being_written := maxi(
-	MIN_FILES_BEING_WRITTEN, OS.get_processor_count() - THREADS_KEPT_FREE
-)
+var _frames_awaited := 0
+var _ends_at_s := INF
+var _skips_when_writers_are_busy := true
 
 
 func setup(
@@ -59,6 +66,18 @@ func setup(
 	return ""
 
 
+func record_every_frame() -> void:
+	## From now on a frame handed over while the writers are busy waits for them, holding the
+	## simulation back, instead of being skipped.
+	_skips_when_writers_are_busy = false
+
+
+func end_after(duration_s: float) -> void:
+	## Asks for no frame once `duration_s` have passed, then emits `ended` when the last one
+	## asked for is on disk.
+	_ends_at_s = duration_s
+
+
 func finish() -> void:
 	## Waits for the frames being written and closes the poses. A frame not handed over yet
 	## is not recorded.
@@ -75,7 +94,7 @@ func _physics_process(delta: float) -> void:
 	if _poses == null:
 		return
 	_time_s += delta
-	if _time_s < _next_capture_s:
+	if _time_s < _next_capture_s or _time_s > _ends_at_s:
 		return
 	_next_capture_s += _period_s
 	if _next_capture_s <= _time_s:
@@ -85,9 +104,16 @@ func _physics_process(delta: float) -> void:
 
 func _process(_delta: float) -> void:
 	# Physics has stepped and the frame is not drawn yet: it will show this state.
-	if _poses == null or not _capture_due:
+	if _poses == null:
+		return
+	if _time_s > _ends_at_s and _frames_awaited == 0:
+		finish()
+		ended.emit()
+		return
+	if not _capture_due:
 		return
 	_capture_due = false
+	_frames_awaited += 1
 	var shown := {
 		"time_s": _time_s,
 		"pose": _vehicle.global_transform,
@@ -98,12 +124,17 @@ func _process(_delta: float) -> void:
 
 
 func _record(frame: StereoFrame, shown: Dictionary) -> void:
+	_frames_awaited -= 1
 	if _poses == null:
 		return
 	_writing_tasks = _writing_tasks.filter(func(task): return not _completed(task))
-	if _writing_tasks.size() >= _max_files_being_written:
-		_frames_skipped += 1
-		return
+	if _writing_tasks.size() >= max_files_being_written:
+		if _skips_when_writers_are_busy:
+			_frames_skipped += 1
+			return
+		for task in _writing_tasks:
+			WorkerThreadPool.wait_for_task_completion(task)
+		_writing_tasks.clear()
 	for image in frame.images:
 		_writing_tasks.append(
 			WorkerThreadPool.add_task(

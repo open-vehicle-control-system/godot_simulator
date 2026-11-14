@@ -34,7 +34,7 @@ What must be rendered to be checked is in `simulator/tests/rendered/test_*.gd`, 
 window, with a display and a GPU:
 
 ```sh
-./simulator/tests/run_rendered_tests.sh   # ground truth and camera effects of generated scenes
+./simulator/tests/run_rendered_tests.sh   # ground truth, camera effects, two identical recordings
 ```
 
 The pack builders in `tools/` are tested with Python's `unittest` (they need numpy and Pillow):
