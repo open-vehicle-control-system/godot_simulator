@@ -27,6 +27,8 @@ extends RefCounted
 ##                           the track's frame, as `spawn` in its pack.json
 ##   --eye=X,Y,Z             look at the vehicle from this fixed point of the track's frame
 ##   --screenshot=FILE       save the window as a PNG once the world has rendered, then quit
+##   --upscale=LEVEL         draw the window smaller and upscale it with FSR 2: quality,
+##                           balanced or performance; the stereo cameras are not upscaled
 ##   --timing                report when the first frame was drawn and, every few seconds,
 ##                           the worst frame time, the GPU time and what was drawn
 
@@ -54,6 +56,7 @@ var spawn_yaw_deg := 0.0
 var eye_given := false
 var eye_position_m := Vector3.ZERO  ## the track's ROS frame: x, y, z up
 var screenshot_path := ""
+var upscale := ""  ## a level of Upscaling.SCALES, or "" for none
 var timing := false
 
 
@@ -127,10 +130,8 @@ func _read(option: String, argument: String) -> String:
 			pack_directories.append(argument)
 		"--link":
 			return _read_link(argument)
-		"--camera":
-			if not argument in ViewPoses.VIEWS:
-				return "--camera is one of %s" % ", ".join(ViewPoses.VIEWS)
-			view = argument
+		"--camera", "--upscale":
+			return _read_choice(option, argument)
 		"--stereo-record":
 			stereo_record_directory = argument
 		"--record":
@@ -145,6 +146,17 @@ func _read(option: String, argument: String) -> String:
 			screenshot_path = argument
 		_:
 			return "unknown option %s" % option
+	return ""
+
+
+func _read_choice(option: String, choice: String) -> String:
+	var choices: Array = ViewPoses.VIEWS if option == "--camera" else Upscaling.SCALES.keys()
+	if not choice in choices:
+		return "%s is one of %s" % [option, ", ".join(choices)]
+	if option == "--camera":
+		view = choice
+	else:
+		upscale = choice
 	return ""
 
 

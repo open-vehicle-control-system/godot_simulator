@@ -35,6 +35,7 @@ track pack and a vehicle pack.
 | `--spawn=X,Y,Z,YAW_DEG` | start there instead of at the track's spawn, in the track's frame as `spawn` in its `pack.json` |
 | `--eye=X,Y,Z` | look at the vehicle from this fixed point of the track's frame |
 | `--screenshot=FILE` | save the window as a PNG once the world has rendered, print what the window and the other viewports (stereo cameras, mirrors) cost to render, quit |
+| `--upscale=LEVEL` | draw the window at a share of its size and upscale it with FSR 2: `quality` (67%), `balanced` (59%) or `performance` (50%); the stereo cameras are never upscaled |
 | `--timing` | print when the first frame was drawn and, every five seconds, the worst frame time, how many frames ran over 33 ms, a physics step's time, the GPU's time over all viewports and what was drawn |
 
 Keys: C cycles the views, V shows the stereo pair, F11 toggles full screen, Esc quits. Under

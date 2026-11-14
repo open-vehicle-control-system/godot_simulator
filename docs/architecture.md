@@ -45,6 +45,7 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `world/instance_batch.gd` | Copies of one mesh about a centre, filled on any thread, drawn and culled together |
 | `world/sky_sun.gd` | Finds the sun in a panorama. Pure |
 | `view/screenshot.gd` | Saves the window and reports what the window and the other viewports cost to render |
+| `view/upscaling.gd` | Draws the window smaller and upscales it with FSR 2 (`--upscale`) |
 | `view/frame_times.gd` | Reports when the first frame was drawn, the worst frame times after it, a physics step's time, the GPU's time over all viewports and what was drawn (`--timing`) |
 | `link/link_protocol.gd` | The link's packets and the Godot ↔ ROS frames. Pure |
 | `link/simulator_link.gd` | The link's TCP client |
@@ -175,6 +176,17 @@ it drew thin outlines around trees against a hill.
 Screen-space reflections are off everywhere: 0.4 ms over the three viewports, and nothing in
 the packs is wet or polished enough to show them but the vehicle's paint and a few windows,
 while grass verges seen at a grazing angle came out speckled.
+
+## Upscaling the window
+
+`--upscale=quality`, `balanced` or `performance` draws the window's 3D at 67%, 59% or 50% of
+its width and height and has FSR 2 rebuild the full picture from the frames before
+(`Upscaling`). At Spa's heaviest view the window then takes 5.0, 4.5 or 3.9 ms of GPU time a
+frame instead of 7.4 ms. It is off unless asked: the picture is softer, and fine detail on the
+moving vehicle (its lettering) breaks up, more at each level. Only the window's viewport is
+set, so the stereo cameras draw every pixel as before: where no tree is in view their images
+are the same byte for byte with any level, and elsewhere they differ as two frames of the
+same view do, by 1/255 in a few hundred pixels of the trees' cards.
 
 ## The cockpit
 
