@@ -44,8 +44,11 @@ data as evidence for it.
   turns them into ramps.
 - **One surface.** Road and terrain meet with no gap, step or floating edge, and collision is the
   same surface the camera sees.
-- **What is drawn solid is solid.** Every mesh of the world collides, and every tree gets a trunk
-  the vehicle stops against; nothing the camera shows as an obstacle may be driven through.
+- **What is drawn solid is solid.** Every mesh that is not ground collides as it is drawn, and
+  every tree gets a trunk the vehicle stops against; nothing the camera shows as an obstacle
+  may be driven through. The ground collides through each tile's height grid, sampled every
+  half metre from the drawn ground (the road where there is one, the terrain elsewhere), so
+  the wheels rest on what the camera sees.
   Large forests are tens of thousands of trunks: they go to the physics server as one body, not
   as a scene node each, or loading slows by seconds.
 - **Inspect the source mesh, not only the raster.** Terrain exported tile by tile can be flat
@@ -415,6 +418,13 @@ texture.
 - **Look from above too.** A high view over the area shows what the road hides: patches under
   lone trees, smeared photo around buildings and in car parks, roofs that do not match the photo.
 - **Measure the frame time** at 1080p; the budget is 16.7 ms per frame for everything.
+- **Measure the start and the streaming.** `--timing` prints when the first frame was drawn
+  (the budget is 3 s from the process's start) and, every five seconds, the worst frame and
+  how many ran over 33 ms. Drive a whole lap with the stereo pair on: tiles enter and leave
+  all along it.
+- **Look at the tiles' edges.** Take captures up close where the road and the terrain cross a
+  tile's edge, and where four tiles meet: no crack, step or change of colour may show there.
+  A view from high above shows which tiles are loaded and where the far terrain takes over.
 - **A reviewer other than the author** looks at the captures and the code before the pack is
   released.
 
@@ -439,7 +449,8 @@ texture.
 6. **Then light and atmosphere**, then vegetation, then buildings and roofs (best effort).
 7. **After every visible change**, capture the same viewpoints, number the capture, share it
    with one line on what changed, and critique it against reality.
-8. **Keep the budget**: measure the frame time at 1080p.
+8. **Cut the tiles** (`tools/track_tiles.py`) from the finished world and keep the budgets:
+   the frame time at 1080p, the start time and the frames while tiles stream (`--timing`).
 9. **Finish**: run the checks (format, lint, tests), update the pack's recipe and attribution
    and the docs the change touches, and report what changed, the frame time, the before/after
    captures and what still looks wrong. Do not commit until the change is validated.

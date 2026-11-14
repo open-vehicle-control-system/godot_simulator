@@ -6,16 +6,11 @@ extends RefCounted
 const KINDS := ["terrain", "roof", "facade", "plain", "seats"]
 const WINDOWS := ["house", "hall", "office"]
 ## The three maps of a texture set, after its path in the pack.
-const TEXTURE_SUFFIXES := ["_albedo.jpg", "_normal.jpg", "_rough.jpg"]
+const TEXTURE_SUFFIXES := ["_albedo.dds", "_normal.dds", "_rough.dds"]
 
 var kind: String
 var meshes := "*"  ## a glob over mesh names
 var materials := "*"  ## a glob over glTF material names
-## terrain: the surface map and the track map, `*` standing for what the `*` of `materials` is
-var map_pattern := ""
-var track_map_pattern := ""  ## "" when the terrain has no road
-var roads_map_pattern := ""  ## "" when the terrain has no roads around the lap
-var lots_map_pattern := ""  ## "" when the terrain has no parking lots
 var textures_path := ""  ## roof, facade, plain, seats: the texture set, without its suffixes
 var size_m := 1.0  ## roof, facade, plain: the width the texture set covers
 var windows := 0  ## facade: the index in WINDOWS
@@ -31,14 +26,6 @@ static func parse(reader: ManifestReader, directory: String) -> SurfaceRule:
 	if reader.has("materials"):
 		rule.materials = reader.text("materials")
 	match rule.kind:
-		"terrain":
-			rule.map_pattern = directory.path_join(reader.text("map"))
-			if reader.has("track_map"):
-				rule.track_map_pattern = directory.path_join(reader.text("track_map"))
-			if reader.has("roads_map"):
-				rule.roads_map_pattern = directory.path_join(reader.text("roads_map"))
-			if reader.has("lots_map"):
-				rule.lots_map_pattern = directory.path_join(reader.text("lots_map"))
 		"facade":
 			rule._read_textures(reader, directory)
 			rule.size_m = reader.positive("size_m")
@@ -60,35 +47,6 @@ static func parse(reader: ManifestReader, directory: String) -> SurfaceRule:
 func covers(mesh_name: String, material_name: String) -> bool:
 	## True when this rule draws `material_name` on `mesh_name`.
 	return mesh_name.match(meshes) and material_name.match(materials)
-
-
-func map_path(material_name: String) -> String:
-	## The surface map of the tile `material_name` shows.
-	return map_pattern.replace("*", captured(material_name))
-
-
-func track_map_path(material_name: String) -> String:
-	## The track map of the tile `material_name` shows; a tile away from the road has none.
-	return track_map_pattern.replace("*", captured(material_name))
-
-
-func roads_map_path(material_name: String) -> String:
-	## The roads map of the tile `material_name` shows; a tile no road passes has none.
-	return roads_map_pattern.replace("*", captured(material_name))
-
-
-func lots_map_path(material_name: String) -> String:
-	## The lots map of the tile `material_name` shows; a tile without a lot has none.
-	return lots_map_pattern.replace("*", captured(material_name))
-
-
-func captured(material_name: String) -> String:
-	## What the `*` of `materials` stands for in `material_name`.
-	var star := materials.find("*")
-	if star < 0:
-		return ""
-	var after_star := materials.length() - star - 1
-	return material_name.substr(star, material_name.length() - star - after_star)
 
 
 func _read_textures(reader: ManifestReader, directory: String) -> void:

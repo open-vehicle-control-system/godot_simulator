@@ -1,7 +1,7 @@
 class_name RoadSigns
 extends RefCounted
-## A track's road signs and traffic signals: a batch of plates per face, one of posts, one of
-## signal heads, and the posts as collision.
+## A track's road signs and traffic signals, tile by tile: a batch of plates per face, one of
+## posts and one of signal heads.
 
 const SIGN_SHADER := preload("res://world/shaders/sign.gdshader")
 const SIGNAL_SHADER := preload("res://world/shaders/signal.gdshader")
@@ -20,53 +20,59 @@ const HOUSING_WIDTH := 1.4
 const HOUSING_DEPTH := 1.0
 const BACKPLATE_MARGIN := 0.55
 
+var _signs: SignsSpec
+var _plate_meshes: Dictionary[String, ArrayMesh] = {}  # face id -> its plate, drawn with its image
+var _post_mesh: ArrayMesh
+var _signal_mesh: ArrayMesh
 
-static func build(signs: SignsSpec) -> Dictionary:
-	## `{"signs": Node3D}` holding the pack's signs and signals, or `{"error": reason}`.
-	var file_name := signs.placed_path.get_file()
-	var placed: Variant = JSON.parse_string(FileAccess.get_file_as_string(signs.placed_path))
-	if not placed is Dictionary:
-		return {"error": "%s is not a JSON object" % file_name}
+
+func _init(signs: SignsSpec) -> void:
+	_signs = signs
+	for face in signs.faces:
+		_plate_meshes[face.id] = _plate(face)
+	_post_mesh = post_mesh()
+	_signal_mesh = signal_mesh(signs)
+
+
+func tile_signs(placed: Dictionary, file_name: String) -> Dictionary:
+	## `{"batches": Array[InstanceBatch], "post_feet", "post_sizes"}` from the `posts`,
+	## `plates` and `signals` a tile lists: what draws its signs, and where its posts stand,
+	## each (diameter, height); or `{"error": reason}`. Reads only what `_init` set up, so it
+	## runs on any thread.
 	var reader := ManifestReader.new(file_name, placed)
-	var root := Node3D.new()
-	root.name = "RoadSigns"
-	var plates_by_face := {}
+	var batches: Array[InstanceBatch] = []
+	var plates := {}
 	for plate in reader.readers("plates"):
-		var face_id := plate.one_of("face", signs.faces.map(func(face): return face.id))
+		var face_id := plate.one_of("face", _signs.faces.map(func(face): return face.id))
 		var facing := _facing(plate)
 		_keep_first_error(reader, plate)
-		plates_by_face.get_or_add(face_id, []).append(facing)
-	var posts := PostBodies.new()
-	var post_transforms: Array[Transform3D] = []
+		if not plates.has(face_id) and _plate_meshes.has(face_id):
+			plates[face_id] = InstanceBatch.new(
+				"Plates %s" % face_id.validate_node_name(), _plate_meshes[face_id]
+			)
+			batches.append(plates[face_id])
+		if plates.has(face_id):
+			plates[face_id].add(facing)
+	var post_feet: Array[Vector3] = []
+	var post_sizes: Array[Vector2] = []
+	var posts := InstanceBatch.new("Posts", _post_mesh)
 	for post in reader.readers("posts"):
 		var foot := post.ros_vector("position_m")
-		var diameter_m := post.positive("diameter_m")
-		var height_m := post.positive("height_m")
+		var size := Vector2(post.positive("diameter_m"), post.positive("height_m"))
 		_keep_first_error(reader, post)
-		posts.add_post(foot, diameter_m, height_m)
-		post_transforms.append(post_transform(foot, diameter_m, height_m))
-	var heads: Array[Transform3D] = []
-	var phases: Array[float] = []
+		post_feet.append(foot)
+		post_sizes.append(size)
+		posts.add(post_transform(foot, size.x, size.y))
+	var heads := InstanceBatch.new("Signals", _signal_mesh, false, true)
 	for head in reader.readers("signals"):
-		heads.append(_facing(head))
-		phases.append(head.number("phase"))
+		heads.add(_facing(head), Color.WHITE, Color(head.number("phase"), 0.0, 0.0))
 		_keep_first_error(reader, head)
 	if reader.error != "":
-		root.free()
-		posts.free()
 		return {"error": reader.error}
-	for face_id in plates_by_face:
-		root.add_child(_plates(signs.face(face_id), plates_by_face[face_id]))
-	root.add_child(_batch("Posts", post_mesh(), post_transforms))
-	root.add_child(posts)
-	var signal_heads := _batch("Signals", signal_mesh(signs), heads)
-	signal_heads.multimesh.use_custom_data = true
-	signal_heads.multimesh.instance_count = heads.size()
-	for index in heads.size():
-		signal_heads.multimesh.set_instance_transform(index, heads[index])
-		signal_heads.multimesh.set_instance_custom_data(index, Color(phases[index], 0.0, 0.0))
-	root.add_child(signal_heads)
-	return {"signs": root}
+	for batch in [posts, heads]:
+		if batch.count > 0:
+			batches.append(batch)
+	return {"batches": batches, "post_feet": post_feet, "post_sizes": post_sizes}
 
 
 static func facing_transform(centre: Vector3, yaw_deg: float) -> Transform3D:
@@ -188,7 +194,7 @@ static func _keep_first_error(reader: ManifestReader, entry: ManifestReader) -> 
 		reader.error = entry.error
 
 
-static func _plates(face: SignsSpec.Face, facings: Array) -> MultiMeshInstance3D:
+static func _plate(face: SignsSpec.Face) -> ArrayMesh:
 	var image := Image.load_from_file(face.image_path)
 	image.generate_mipmaps()
 	var material := ShaderMaterial.new()
@@ -196,21 +202,4 @@ static func _plates(face: SignsSpec.Face, facings: Array) -> MultiMeshInstance3D
 	material.set_shader_parameter("face", ImageTexture.create_from_image(image))
 	var mesh := plate_mesh(face.outline)
 	mesh.surface_set_material(0, material)
-	var transforms: Array[Transform3D] = []
-	transforms.assign(facings)
-	return _batch("Plates %s" % face.id.validate_node_name(), mesh, transforms)
-
-
-static func _batch(
-	batch_name: String, mesh: Mesh, transforms: Array[Transform3D]
-) -> MultiMeshInstance3D:
-	var batch := MultiMesh.new()
-	batch.transform_format = MultiMesh.TRANSFORM_3D
-	batch.mesh = mesh
-	batch.instance_count = transforms.size()
-	for index in transforms.size():
-		batch.set_instance_transform(index, transforms[index])
-	var instance := MultiMeshInstance3D.new()
-	instance.name = batch_name
-	instance.multimesh = batch
-	return instance
+	return mesh

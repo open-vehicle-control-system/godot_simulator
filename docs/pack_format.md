@@ -4,7 +4,7 @@ description: What a track or vehicle pack contains, so it can be built and relea
 ---
 
 A pack is a directory holding a `pack.json` manifest and the files it names. Packs are data:
-glTF 2.0 binaries, images and JSON, never code. Each is released on its own, as an archive of
+glTF 2.0 binaries, images, JSON and arrays of numbers, never code. Each is released on its own, as an archive of
 its directory, under the licence its manifest states.
 
 ## Finding packs
@@ -108,7 +108,8 @@ for a vehicle; x, y, z up for a world.
 
 ```json
 "track": {
-  "world": "world.glb",
+  "tiles": "tiles.json",
+  "far": {"scene": "far.glb", "photo": "far.jpg"},
   "sky": "sky.hdr",
   "sun": {"azimuth_deg": 45.0, "elevation_deg": 40.0},
   "spawn": {"position_m": [196.92, -127.35, 21.32], "yaw_deg": -71.0},
@@ -119,7 +120,11 @@ for a vehicle; x, y, z up for a world.
 }
 ```
 
-- `world` is the scene, in glTF's convention (+Y up). Every mesh in it collides.
+- `tiles` lists the square tiles the world is cut into, each loaded on its own: see
+  [Tiles](#tiles). Every track is tiled, whatever its size.
+- `far` is optional: the whole area, coarse, drawn where a tile is not loaded. `scene` holds
+  one mesh per tile, named `Far_<key>`, UV 0 across `photo`, an image graded as the
+  ground's orthophotos are.
 - `sky` is optional: an equirectangular panorama (HDR, PNG or JPEG) in the pack. Without it the
   sky is procedural.
 - `sun` is optional: where the sun is, `azimuth_deg` counter-clockwise from x seen from above
@@ -130,6 +135,53 @@ for a vehicle; x, y, z up for a world.
 - `ground`, `surfaces`, `trees` and `signs` are optional: see [Surfaces](#surfaces),
   [Trees](#trees) and [Signs and signals](#signs-and-signals).
   A material no surface covers is drawn as its glTF PBR definition.
+
+### Tiles
+
+```json
+{
+  "tile_size_m": 256.0,
+  "ground_step_m": 0.5,
+  "tiles": [
+    {
+      "key": "763368_626948",
+      "corner_m": [-854.0, -282.0],
+      "bounds_m": [[-854.0, -282.0, 49.1], [-598.0, -26.0, 98.7]],
+      "maps": ["track", "roads", "lots"]
+    }
+  ]
+}
+```
+
+- `tile_size_m` is the side of every tile and `ground_step_m` the spacing of the samples of
+  its ground's heights, which divides the side.
+- A tile's `key` names its files, all under `tiles/`. `corner_m` is its corner of lowest x
+  and y; `bounds_m` the lowest and highest corners of the box holding everything in it, which
+  may reach past its square (a wall whose centre is on the tile). `maps` lists the optional
+  ground maps it has.
+
+| File | Holds |
+|---|---|
+| `<key>.glb` | the tile's meshes, in glTF's convention (+Y up), in the world's frame |
+| `<key>.ground.f32` | the height of the ground: little-endian 32-bit floats, `tile_size_m / ground_step_m + 1` rows of as many samples, from `corner_m` towards +x row by row and towards +y within a row, both edges included |
+| `<key>.photo.jpg` | the orthophoto of the tile, for the `terrain` surface; the simulator builds its mipmaps as it reads it |
+| `<key>.surface.png` | the surface map of the tile, for the `terrain` surface |
+| `<key>.track.png`, `<key>.roads.png`, `<key>.lots.png` | the tile's track map, roads map and lots map, when `maps` lists them |
+| `<key>.json` | what stands on the tile, for a track with `trees` or `signs`: `trees`, `posts`, `plates` and `signals` |
+
+- A mesh belongs to one tile. The ground (what the `terrain` surface draws) is cut on the
+  tiles' edges, neighbours sharing the corners along them, so it has no seam; any other mesh is
+  whole in the tile holding its centre.
+- The vehicle rests on the heights of `<key>.ground.f32`, which follow the drawn ground: the
+  road where there is one, the terrain elsewhere. Beyond the ground's edge they carry its
+  height on. Neighbours hold the same heights along their common edge. Every mesh the
+  `terrain` surface does not draw collides as it is drawn.
+- The simulator loads the tiles within 200 m of the spawn before its first frame, then keeps
+  those within 900 m of the vehicle loaded, freeing a tile once it is 1100 m away. The tiles
+  within 120 m of the vehicle collide.
+- `<key>.json`: `trees` holds a list per kind, `conifer` and `broadleaf`, of trees as
+  `[x, y, z, height_m]`; `posts`, `plates` and `signals` are lists as
+  [Signs and signals](#signs-and-signals) describes. Positions are in the world's ROS frame.
 
 ### Surfaces
 
@@ -142,22 +194,25 @@ simulator surface that draws them; the first rule that covers a material on a me
 | `meshes`, `materials` | globs (`*`, `?`) over mesh and glTF material names; `*` when left out |
 
 A texture set is named by its path in the pack without suffix: `textures/brick` stands for
-`textures/brick_albedo.jpg`, `textures/brick_normal.jpg` (OpenGL convention) and
-`textures/brick_rough.jpg`.
+`textures/brick_albedo.dds`, `textures/brick_normal.dds` (OpenGL convention) and
+`textures/brick_rough.dds`. The texture sets and the tree atlases are DDS files, block-compressed, with their mipmaps,
+so loading one is reading it: BC1 for colour and roughness, BC3 for colour with alpha, and BC5 for
+normals, which keeps x and y (the simulator rebuilds z). The ground's layers are all of one
+size.
 
 | Surface | Draws | Takes |
 |---|---|---|
-| `terrain` | the ground and what lies on it: the `ground`'s layers under the orthophoto, the lap's road with its lines, kerbs and rubber, the roads around it with their markings, and the parking lots with their bays | the glTF material's base colour texture as the orthophoto, UV 0 across it; `map`; optional `track_map`, `roads_map`, `lots_map` |
+| `terrain` | the ground and what lies on it: the `ground`'s layers under the orthophoto, the lap's road with its lines, kerbs and rubber, the roads around it with their markings, and the parking lots with their bays | the tile's photo and maps, UV 0 across the tile |
 | `roof` | a roofing texture set whose rows run along the eave, tinted to the roof's colour, with a dark trim along its edge | `textures`, `size_m`; UV 0 = (metres along the eave, metres up the slope); vertex colour = the roof's albedo (linear RGB), its alpha the distance to the roof's edge over 2 m |
 | `facade` | a tiled wall with windows drawn in metres and dirt at its foot | `textures`, `size_m` (the width the set covers), `windows` (`house`, `hall` or `office`), `tint` (RGB factors); UV 0 = (metres along the wall, 1 - metres above the ground) / 3, UV 1 x = the wall's height in metres |
 | `plain` | a texture set projected in world space (walls, barriers) | `textures`, `size_m`, `tint` |
 | `seats` | grandstand steps with rows of seats and stair aisles | `textures` (the concrete), `tint` (the seats); UV 0 = (metres along the stand, 1 - metres of depth), UV 1 = (row depth in metres, 1 - face kind: 0 tread, 1 riser, 2 plain) |
 
-`map`, `track_map`, `roads_map` and `lots_map` name one image per orthophoto tile: their `*`
-stands for what the `*` of `materials` matched, so with `"materials": "M_Ortho_*"` and
-`"map": "surfaces/*.png"` the material `M_Ortho_670012_610012` takes
-`surfaces/670012_610012.png`. Each covers the tile as its orthophoto does. A tile without a
-track map, roads map or lots map has no road or lot on it.
+The photo and the maps are the tile's ([Tiles](#tiles)); each covers the tile, its first row
+along the tile's edge of lowest x (north, for a world whose x points south) and its first
+column along the edge of lowest y. UV 0 of the ground's meshes is (0, 0) there and (1, 1) at
+the opposite corner. A tile without a track map, roads map or lots map has no road or lot on
+it.
 
 - A **surface map** is an 8-bit greyscale PNG: each pixel's value is the index of the `ground`
   layer there. Its resolution is free; 25 cm per pixel matches the orthophotos.
@@ -279,16 +334,14 @@ long every 75 cm, pointing at the traffic that gives way), as worn white paint.
 
 ```json
 "trees": {
-  "instances": "trees.json",
   "impostors": [
-    {"atlas": "trees/fir.png", "views": 3, "width_m": 7.8, "height_m": 18.9, "kind": "conifer"}
+    {"atlas": "trees/fir.dds", "views": 3, "width_m": 7.8, "height_m": 18.9, "kind": "conifer"}
   ]
 }
 ```
 
-- `instances` is a JSON object with a list per kind, `conifer` and `broadleaf`, of trees as
-  `[x, y, z, height_m]` in the world's ROS frame.
-- An impostor's `atlas` is an RGBA image of the tree seen from `views` directions evenly spread
+- The trees stand where the tiles list them ([Tiles](#tiles)); every trunk collides.
+- An impostor's `atlas` is a DDS texture with alpha of the tree seen from `views` directions evenly spread
   over half a turn, side by side; `width_m` and `height_m` are one view's. Each tree is drawn
   with an impostor of its kind, scaled to its height.
 
@@ -296,7 +349,6 @@ long every 75 cm, pointing at the traffic that gives way), as worn white paint.
 
 ```json
 "signs": {
-  "placed": "signs.json",
   "faces": [
     {"id": "BE:C43[50]", "image": "signs/be_c43_50.png",
      "outline_m": [[0.35, 0.0], [0.346, 0.055], [0.333, 0.108]]}
@@ -310,8 +362,8 @@ long every 75 cm, pointing at the traffic that gives way), as worn white paint.
   is what the front shows, across the outline's bounding box. The back is bare metal.
 - `signal` describes every signal head: three lenses of `lens_diameter_m`, red on top, lit
   in turn for `cycle_s` seconds of green, amber and red.
-- `placed` is a JSON object of three lists, positions in the world's ROS frame, yaw
-  counter-clockwise from x seen from above:
+- The tiles list what is placed ([Tiles](#tiles)), each tile in three lists, positions in the
+  world's ROS frame, yaw counter-clockwise from x seen from above:
 
 ```json
 {

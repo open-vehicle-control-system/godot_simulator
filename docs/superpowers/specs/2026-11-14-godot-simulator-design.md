@@ -114,8 +114,8 @@ Options are command-line arguments after `--`: `--track=ID`, `--vehicle=ID`,
   `pack.json` the geometry the simulator needs (axles, track widths, wheel radius, body box),
   the driver's eye, and the stereo mount and optics. A pack without a model gets a box and
   cylinders.
-- **Track pack:** a world scene (`world.glb`) or a tile set (a tile index, one glb and one
-  height grid per tile, a coarse far terrain), a spawn pose, optional route and environment
+- **Track pack:** a tile set (a tile index, one glb and one height grid per tile, a coarse
+  far terrain), a spawn pose, optional route and environment
   (sky). Materials are plain glTF PBR; a material may name a simulator surface (road, terrain,
   facade) that the simulator renders with its own shader and the pack's textures.
 

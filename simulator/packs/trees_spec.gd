@@ -1,6 +1,6 @@
 class_name TreesSpec
 extends RefCounted
-## A track pack's `trees`: where its trees stand and the impostors that draw them.
+## A track pack's `trees`: the impostors that draw the trees its tiles list.
 
 const KINDS := ["conifer", "broadleaf"]
 
@@ -14,14 +14,12 @@ class Impostor:
 	var kind: String  ## one of KINDS
 
 
-var instances_path: String
 var impostors: Array[Impostor] = []
 
 
 static func parse(reader: ManifestReader, directory: String) -> TreesSpec:
 	## The trees at `trees` in `reader`; `reader.error` tells what is wrong with them.
 	var trees := TreesSpec.new()
-	trees.instances_path = reader.file("trees.instances", directory)
 	var impostor_readers := reader.readers("trees.impostors")
 	reader.check(not impostor_readers.is_empty(), "trees.impostors")
 	for impostor_reader in impostor_readers:

@@ -1,7 +1,7 @@
 class_name TrackWorld
 extends RefCounted
-## Builds a track pack's world: its scene with static collision from every mesh, and the
-## environment (sky, sun, tone mapping) it is lit by.
+## Builds a track pack's world: its tiles, streamed, and the environment (sky, sun, tone
+## mapping) it is lit by.
 
 const DEFAULT_SUN_DIRECTION := Vector3(0.39, 0.62, -0.68)
 const SUN_ENERGY := 3.2
@@ -20,32 +20,16 @@ const GLOW_THRESHOLD := 1.4
 
 
 static func load_world(track: TrackSpec) -> Dictionary:
-	## `{"world": Node3D}` with collision, drawn with the track's surfaces, trees and signs, or
-	## `{"error": reason}`.
-	var document := GLTFDocument.new()
-	var state := GLTFState.new()
-	if document.append_from_file(track.world_path, state) != OK:
-		return {"error": "%s: %s does not load" % [track.id, track.world_path.get_file()]}
-	var world := document.generate_scene(state) as Node3D
-	world.name = "Track"
-	for mesh in world.find_children("*", "MeshInstance3D", true, false):
-		_add_collision(mesh)
-	var problem := SurfaceMaterials.apply(world, track)
+	## `{"world": TrackTiles}` with the tiles around the track's spawn loaded, the nearest with
+	## their collision, drawn with the track's surfaces, trees and signs; or `{"error": reason}`.
+	var found := TrackTiles.create(track)
+	if found.has("error"):
+		return found
+	var world: TrackTiles = found["tiles"]
+	var problem := world.load_around(track.spawn_position)
 	if problem != "":
 		world.free()
 		return {"error": problem}
-	if track.trees != null:
-		var forest_found := Forest.build(track.trees)
-		if forest_found.has("error"):
-			world.free()
-			return {"error": "%s: %s" % [track.id, forest_found["error"]]}
-		world.add_child(forest_found["forest"])
-	if track.signs != null:
-		var signs_found := RoadSigns.build(track.signs)
-		if signs_found.has("error"):
-			world.free()
-			return {"error": "%s: %s" % [track.id, signs_found["error"]]}
-		world.add_child(signs_found["signs"])
 	return {"world": world}
 
 
@@ -53,18 +37,31 @@ static func lighting(track: TrackSpec) -> Dictionary:
 	## `{"environment": Environment, "sun": DirectionalLight3D}`: the track's sky, the sun
 	## where the pack puts it (or where its sky shows it), ambient light, atmosphere and tone
 	## mapping. A sky is turned so its sun is where the light comes from.
+	return lighting_under(track, read_sky(track))
+
+
+static func read_sky(track: TrackSpec) -> Dictionary:
+	## `{"panorama": Image, "sun": Vector3}`: the track's sky and where it shows the sun, or
+	## `{}` for a track without a sky. Touches no scene, so it runs on a worker thread.
+	if track.sky_path == "":
+		return {}
+	var panorama := Image.load_from_file(track.sky_path)
+	return {"panorama": panorama, "sun": SkySun.direction(panorama)}
+
+
+static func lighting_under(track: TrackSpec, sky_read: Dictionary) -> Dictionary:
+	## `lighting` under the sky `read_sky` read.
 	var lit := Environment.new()
 	var sky := Sky.new()
 	var sun_direction := DEFAULT_SUN_DIRECTION.normalized()
 	if track.sun_given:
 		sun_direction = track.sun_direction()
-	if track.sky_path != "":
-		var image := Image.load_from_file(track.sky_path)
+	if not sky_read.is_empty():
 		var panorama := PanoramaSkyMaterial.new()
-		panorama.panorama = ImageTexture.create_from_image(image)
+		panorama.panorama = ImageTexture.create_from_image(sky_read["panorama"])
 		panorama.energy_multiplier = SKY_ENERGY
 		sky.sky_material = panorama
-		var sky_sun := SkySun.direction(image)
+		var sky_sun: Vector3 = sky_read["sun"]
 		if track.sun_given:
 			lit.sky_rotation = Vector3(0.0, SkySun.yaw_between(sky_sun, sun_direction), 0.0)
 		else:
@@ -104,13 +101,3 @@ static func _sun(towards_sun: Vector3) -> DirectionalLight3D:
 	light.directional_shadow_max_distance = SHADOW_DISTANCE_M
 	light.basis = Basis.looking_at(-towards_sun)
 	return light
-
-
-static func _add_collision(mesh: MeshInstance3D) -> void:
-	var shape := ConcavePolygonShape3D.new()
-	shape.set_faces(mesh.mesh.get_faces())
-	var collision := CollisionShape3D.new()
-	collision.shape = shape
-	var body := StaticBody3D.new()
-	body.add_child(collision)
-	mesh.add_child(body)

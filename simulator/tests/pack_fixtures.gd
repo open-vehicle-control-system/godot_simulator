@@ -78,7 +78,7 @@ static func cockpit_manifest(id: String) -> Dictionary:
 
 
 static func track_manifest(id: String) -> Dictionary:
-	## A valid track manifest naming world.glb and a spawn at the origin.
+	## A valid track manifest naming tiles.json and a spawn at the origin.
 	return {
 		"format": 1,
 		"kind": "track",
@@ -87,7 +87,7 @@ static func track_manifest(id: String) -> Dictionary:
 		"version": "1.0.0",
 		"licence": "CC0-1.0",
 		"attribution": [],
-		"track": {"world": "world.glb", "spawn": {"position_m": [0.0, 0.0, 0.0], "yaw_deg": 0.0}},
+		"track": {"tiles": "tiles.json", "spawn": {"position_m": [0.0, 0.0, 0.0], "yaw_deg": 0.0}},
 	}
 
 
@@ -145,39 +145,162 @@ static func write_cockpit_model(pack_directory: String) -> void:
 
 
 static func write_flat_world(pack_directory: String, size_m: float) -> void:
-	## world.glb: a flat square of ground `size_m` wide, centred on the origin, at height 0.
+	## One tile `a`: a flat square of ground `size_m` wide, centred on the origin, at height 0.
+	var corner := Vector2(-0.5, -0.5) * size_m
+	write_tile_index(pack_directory, size_m, size_m * 0.5, {"a": corner})
+	write_flat_tile(pack_directory, "a", corner, size_m, 0.0, "Ground", "")
+
+
+static func write_photo_world(pack_directory: String, material_name: String, maps := []) -> void:
+	## One tile `a` with the ground maps `maps`: a flat square of ground named `Terrain_a`,
+	## 20 m wide, drawn with a material named `material_name`.
+	var corner := Vector2(-10.0, -10.0)
+	write_tile_index(pack_directory, 20.0, 10.0, {"a": corner}, maps)
+	write_flat_tile(pack_directory, "a", corner, 20.0, 0.0, "Terrain_a", material_name)
+
+
+static func write_tile_index(
+	pack_directory: String,
+	tile_size_m: float,
+	ground_step_m: float,
+	corners: Dictionary,
+	maps := []
+) -> void:
+	## tiles.json listing a tile per key of `corners`, each at its (x, z) corner in Godot's
+	## frame, holding what lies within 100 m of height 0 over its square.
+	var tiles := []
+	for key in corners:
+		var corner: Vector2 = corners[key]
+		(
+			tiles
+			. append(
+				{
+					"key": key,
+					"corner_m": [corner.y, corner.x],
+					"bounds_m":
+					[
+						[corner.y, corner.x, -100.0],
+						[corner.y + tile_size_m, corner.x + tile_size_m, 100.0]
+					],
+					"maps": maps,
+				}
+			)
+		)
+	var index := {"tile_size_m": tile_size_m, "ground_step_m": ground_step_m, "tiles": tiles}
+	var file := FileAccess.open(pack_directory.path_join("tiles.json"), FileAccess.WRITE)
+	file.store_string(JSON.stringify(index))
+
+
+static func write_flat_tile(
+	pack_directory: String,
+	key: String,
+	corner: Vector2,
+	size_m: float,
+	height_m: float,
+	mesh_name: String,
+	material_name: String
+) -> void:
+	## A tile's scene and ground: a flat square `size_m` wide at `height_m`, its mesh named
+	## `mesh_name` and drawn with a material named `material_name` unless that is "". The
+	## ground's heights are three by three.
+	var directory := pack_directory.path_join("tiles")
+	DirAccess.make_dir_recursive_absolute(directory)
 	var root := Node3D.new()
-	root.name = "World"
+	root.name = "Tile"
 	var ground := PlaneMesh.new()
 	ground.size = Vector2(size_m, size_m)
-	_add_mesh(root, "Ground", ground, Vector3.ZERO)
-	_write_gltf(root, pack_directory.path_join("world.glb"))
+	if material_name != "":
+		var material := StandardMaterial3D.new()
+		material.resource_name = material_name
+		ground.material = material
+	var centre := corner + Vector2.ONE * size_m * 0.5
+	_add_mesh(root, mesh_name, ground, Vector3(centre.x, height_m, centre.y))
+	_write_gltf(root, directory.path_join(key + ".glb"))
+	var heights := PackedFloat32Array()
+	heights.resize(9)
+	heights.fill(height_m)
+	var file := FileAccess.open(directory.path_join(key + ".ground.f32"), FileAccess.WRITE)
+	file.store_buffer(heights.to_byte_array())
 
 
-static func write_photo_world(pack_directory: String, material_name: String) -> void:
-	## world.glb: a flat square of ground named `Terrain_a`, 20 m wide, drawn with a material
-	## named `material_name` whose colour is a small image, as an orthophoto tile is.
+static func write_slabs_tile(pack_directory: String, heights_m: Array, triangles: int) -> void:
+	## One tile `a`, 20 m wide and centred on the origin, its ground at height 0, holding a
+	## flat mesh of at least `triangles` triangles at each of `heights_m`, none of them ground.
+	var corner := Vector2(-10.0, -10.0)
+	write_tile_index(pack_directory, 20.0, 10.0, {"a": corner})
+	write_flat_tile(pack_directory, "a", corner, 20.0, 0.0, "Ground", "")
 	var root := Node3D.new()
-	root.name = "World"
-	var ground := PlaneMesh.new()
-	ground.size = Vector2(20.0, 20.0)
-	var material := StandardMaterial3D.new()
-	material.resource_name = material_name
+	root.name = "Tile"
+	for height_m in heights_m:
+		var slab := PlaneMesh.new()
+		slab.size = Vector2(20.0, 20.0)
+		slab.subdivide_width = ceili(sqrt(triangles * 0.5))
+		slab.subdivide_depth = slab.subdivide_width
+		_add_mesh(root, "Slab_%d" % heights_m.find(height_m), slab, Vector3(0.0, height_m, 0.0))
+	_write_gltf(root, pack_directory.path_join("tiles/a.glb"))
+
+
+static func write_tile_row(
+	pack_directory: String, tile_size_m: float, count: int, rise_m := 1.0
+) -> void:
+	## Tiles `t0`, `t1`, ... side by side along +X from the origin, each flat and `rise_m`
+	## higher than the one before, its ground mesh named `Terrain_<key>`.
+	var corners := {}
+	for number in count:
+		corners["t%d" % number] = Vector2(number * tile_size_m, -0.5 * tile_size_m)
+	write_tile_index(pack_directory, tile_size_m, tile_size_m * 0.5, corners)
+	for number in count:
+		var key := "t%d" % number
+		write_flat_tile(
+			pack_directory, key, corners[key], tile_size_m, number * rise_m, "Terrain_" + key, ""
+		)
+
+
+static func write_ground_heights(
+	pack_directory: String, key: String, heights_m: PackedFloat32Array
+) -> void:
+	## A tile's ground heights, rows running towards +Z and columns towards +X.
+	var path := pack_directory.path_join("tiles").path_join(key + ".ground.f32")
+	FileAccess.open(path, FileAccess.WRITE).store_buffer(heights_m.to_byte_array())
+
+
+static func write_far_terrain(pack_directory: String, keys: Array) -> void:
+	## far.glb with a mesh `Far_<key>` per key, and far.jpg.
+	var root := Node3D.new()
+	root.name = "Far"
+	for key in keys:
+		_add_mesh(root, "Far_" + key, PlaneMesh.new(), Vector3.ZERO)
+	_write_gltf(root, pack_directory.path_join("far.glb"))
 	var photo := Image.create_empty(4, 4, false, Image.FORMAT_RGB8)
-	photo.fill(Color(0.4, 0.5, 0.3))
-	material.albedo_texture = ImageTexture.create_from_image(photo)
-	ground.material = material
-	_add_mesh(root, "Terrain_a", ground, Vector3.ZERO)
-	_write_gltf(root, pack_directory.path_join("world.glb"))
+	photo.fill(Color(0.3, 0.4, 0.2))
+	photo.save_jpg(pack_directory.path_join("far.jpg"))
+
+
+static func write_tile_objects(pack_directory: String, key: String, standing: Dictionary) -> void:
+	## A tile's `<key>.json`: `standing` with what it leaves out of trees, posts, plates and
+	## signals listed empty.
+	var listed := {"trees": {"conifer": [], "broadleaf": []}}
+	for kind in ["posts", "plates", "signals"]:
+		listed[kind] = []
+	listed.merge(standing, true)
+	var file := FileAccess.open(
+		pack_directory.path_join("tiles").path_join(key + ".json"), FileAccess.WRITE
+	)
+	file.store_string(JSON.stringify(listed))
+
+
+static func write_dds(pack_directory: String, file_name: String, colour: Color) -> void:
+	## A 4 x 4 DDS texture of one colour.
+	DirAccess.make_dir_recursive_absolute(pack_directory.path_join(file_name).get_base_dir())
+	var image := Image.create_empty(4, 4, false, Image.FORMAT_RGB8)
+	image.fill(colour)
+	image.save_dds(pack_directory.path_join(file_name))
 
 
 static func write_texture_set(pack_directory: String, textures: String) -> void:
 	## The three maps of the texture set `textures`, each a few pixels of one colour.
-	DirAccess.make_dir_recursive_absolute(pack_directory.path_join(textures).get_base_dir())
 	for suffix in SurfaceRule.TEXTURE_SUFFIXES:
-		var map := Image.create_empty(4, 4, false, Image.FORMAT_RGB8)
-		map.fill(Color(0.5, 0.5, 0.5))
-		map.save_jpg(pack_directory.path_join(textures + suffix))
+		write_dds(pack_directory, textures + suffix, Color(0.5, 0.5, 0.5))
 
 
 static func write_image(pack_directory: String, file_name: String, colour: Color) -> void:
@@ -200,22 +323,19 @@ static func ground_manifest(id: String) -> Dictionary:
 		"road": {"lines": "road_lines.png", "lap_length_m": 100.0, "layer": 0},
 	}
 	manifest["track"]["surfaces"] = [
-		{
-			"meshes": "Terrain_*",
-			"materials": "M_Photo_*",
-			"surface": "terrain",
-			"map": "surfaces/*.png",
-			"track_map": "track/*.png",
-		}
+		{"meshes": "Terrain_*", "materials": "M_Photo_*", "surface": "terrain"}
 	]
 	return manifest
 
 
 static func write_ground_files(pack_directory: String) -> void:
-	## What `ground_manifest` names, for a world whose ground is drawn with `M_Photo_a`.
+	## What `ground_manifest` names, and the photo and surface map of the tile `a`.
 	write_texture_set(pack_directory, "textures/grass")
 	write_image(pack_directory, "road_lines.png", Color(0.4, 0.4, 0.5, 0.5))
-	write_image(pack_directory, "surfaces/a.png", Color(0.0, 0.0, 0.0))
+	write_image(pack_directory, "tiles/a.surface.png", Color(0.0, 0.0, 0.0))
+	var photo := Image.create_empty(4, 4, false, Image.FORMAT_RGB8)
+	photo.fill(Color(0.4, 0.5, 0.3))
+	photo.save_jpg(pack_directory.path_join("tiles/a.photo.jpg"))
 
 
 static func _box(size: Vector3) -> BoxMesh:
@@ -245,7 +365,6 @@ static func signs_manifest(id: String) -> Dictionary:
 	## A valid track manifest with one sign face, a square of 0.6 m.
 	var manifest := track_manifest(id)
 	manifest["track"]["signs"] = {
-		"placed": "signs.json",
 		"faces":
 		[
 			{
@@ -260,8 +379,6 @@ static func signs_manifest(id: String) -> Dictionary:
 
 
 static func write_signs_files(pack_directory: String, placed: Dictionary) -> void:
-	## The files `signs_manifest` names: the face's image, and `placed` as signs.json.
-	DirAccess.make_dir_recursive_absolute(pack_directory.path_join("signs"))
+	## The face's image `signs_manifest` names, and `placed` standing on the tile `a`.
 	write_image(pack_directory, "signs/square.png", Color.RED)
-	var file := FileAccess.open(pack_directory.path_join("signs.json"), FileAccess.WRITE)
-	file.store_string(JSON.stringify(placed))
+	write_tile_objects(pack_directory, "a", placed)

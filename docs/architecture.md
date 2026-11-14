@@ -29,13 +29,20 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `vehicle/instrument_scales.gd` | Needle and steering wheel angles from the pack's scales. Pure |
 | `vehicle/instruments.gd` | Turns the cockpit's needles and steering wheel as the vehicle moves |
 | `vehicle/mirrors.gd`, `vehicle/mirror.gdshader` | The mirrors: a view looking back per piece of mirror glass |
-| `world/track_world.gd` | The track's scene with collision, and its lighting and atmosphere |
+| `world/track_world.gd` | The track's world around its spawn, and its lighting and atmosphere |
+| `packs/tiles_spec.gd` | A track's tiles, validated |
+| `world/track_tiles.gd`, `world/tile_ring.gd` | The world, streamed: which tiles are loaded, collide and are freed as the vehicle moves |
+| `world/tile_loader.gd`, `world/tile_content.gd` | A tile read from its files on a worker thread, then built into a scene on the main thread |
+| `world/tile_collision.gd` | A tile's collision: its ground's heights, the meshes standing on it, trunks and posts |
+| `world/far_terrain.gd` | The coarse terrain shown where a tile is not loaded |
 | `packs/surface_rule.gd`, `packs/ground_spec.gd`, `packs/trees_spec.gd`, `packs/signs_spec.gd` | A track's surfaces, ground layers, trees and signs, validated |
 | `world/surface_materials.gd`, `world/shaders/` | The simulator's surfaces: materials built from the pack's textures and maps |
-| `world/forest.gd` | The track's trees as impostors |
-| `world/road_signs.gd`, `world/post_bodies.gd` | The track's road signs and signals: a batch per sign face, one of posts, one of signal heads; every post as collision in one physics body |
+| `world/forest.gd`, `world/tree_trunks.gd` | A tile's trees as impostors; their trunks as collision in one physics body |
+| `world/road_signs.gd`, `world/post_bodies.gd` | A tile's road signs and signals: a batch per sign face, one of posts, one of signal heads; its posts as collision in one physics body |
+| `world/instance_batch.gd` | Copies of one mesh, filled on any thread and drawn together |
 | `world/sky_sun.gd` | Finds the sun in a panorama. Pure |
 | `view/screenshot.gd` | Saves the window and reports what the window and the other viewports cost to render |
+| `view/frame_times.gd` | Reports when the first frame was drawn and the worst frame times after it (`--timing`) |
 | `link/link_protocol.gd` | The link's packets and the Godot ↔ ROS frames. Pure |
 | `link/simulator_link.gd` | The link's TCP client |
 | `sensors/stereo_camera.gd` | The stereo pair's cameras and intrinsics |
@@ -68,6 +75,34 @@ the way (walls, barriers, buildings, tree trunks, sign posts) it goes as far as 
 speed zero, odometer stopped, which is what OVCS then reads. A move away from what it touches is
 always allowed, so it can back off or turn away.
 
+## The world, streamed
+
+A track is tiles ([Pack format](./pack_format.md#tiles)), and the simulator holds only those
+near the vehicle, so a track of any size starts in about a second and costs the same to run.
+
+- **Before the first frame** it loads what every tile shares (the ground's layers, the tree
+  impostors, the sign faces, the far terrain) and the tiles within 200 m of the spawn, with
+  their collision; the vehicle's model and the sky load on worker threads meanwhile. The
+  vehicle is placed on real ground.
+- **Afterwards** the tiles within 900 m of the vehicle are read on worker threads, nearest
+  first, three at a time, and enter the scene one a frame; a tile is freed once 1100 m away,
+  further than it is loaded from, so a tile at the border is not loaded and freed in turns.
+  Where a tile is not loaded, the far terrain shows.
+- **A worker thread only reads**: files, glTF, images, JSON. Everything that reaches the
+  rendering or physics server (meshes, textures, materials, shapes) is made on the main
+  thread when the tile enters the scene, a few milliseconds a tile.
+- **Collision is only near the vehicle**: the tiles within 120 m of it, kept until 180 m.
+  Checked every physics step before the vehicle moves; a tile that should collide and is not
+  loaded (the vehicle was moved there) is loaded at once, so the ground rays and the body
+  sweep never meet missing collision.
+- **The ground collides as a height grid** the builder samples from the drawn ground: making
+  one costs half a millisecond, where triangles cost 0.6 µs each on the main thread whichever
+  thread asks. Only what stands on the ground collides as triangles, in shapes of a few
+  thousand made one a frame once the tile is in the scene, ahead of the vehicle's coming.
+
+`--timing` prints when the first frame was drawn and, every five seconds, the worst frame and
+how many ran over 33 ms.
+
 ## The cockpit
 
 What moves in the cockpit comes from the vehicle pack ([Pack format](./pack_format.md#vehicle-packs)):
@@ -83,7 +118,7 @@ metal. `--screenshot` reports their cost with the stereo cameras', as the other 
 
 ## Surfaces
 
-A track pack says which simulator surface draws each glTF material of its world
+A track pack says which simulator surface draws each glTF material of its tiles
 ([Pack format](./pack_format.md#surfaces)); the shaders are the simulator's, the textures and
 maps the pack's.
 

@@ -30,7 +30,10 @@ void fragment() {
 	vec2 at_m = vec2(UV.x, 1.0 - UV.y) * UV_UNIT_M;
 	vec2 wall_uv = at_m / size_m;
 	vec3 wall = texture(wall_albedo, wall_uv).rgb * tint;
-	vec3 normal = texture(wall_normal, wall_uv).rgb;
+	// The normal map stores x and y: z is what makes the normal a unit long.
+	vec2 stored = texture(wall_normal, wall_uv).rg;
+	vec2 leaning = stored * 2.0 - 1.0;
+	vec3 normal = vec3(stored, 0.5 + 0.5 * sqrt(max(1.0 - dot(leaning, leaning), 0.0)));
 	float roughness = texture(wall_roughness, wall_uv).r;
 
 	float glass = 0.0;

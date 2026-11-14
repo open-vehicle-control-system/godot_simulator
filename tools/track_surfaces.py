@@ -24,6 +24,7 @@ from PIL import Image, ImageDraw, ImageFilter
 Image.MAX_IMAGE_PIXELS = None
 
 TILE_M = 512.0
+PACK_TILE_M = 256.0  # the pack's tiles: each orthophoto tile is cut into whole ones
 BLOCK_PX = 2048
 BLOCK_MARGIN_PX = 48
 GRADE_SAMPLE_STEP_PX = 8
@@ -109,13 +110,31 @@ class Mosaic:
                 Image.open(path).convert("RGB")
             )
 
-    def tile_origin_px(self, corner):
-        """Return the (row, column) of a tile's top-left pixel."""
+    def tile_origin_px(self, corner, tile_m=TILE_M):
+        """Return the (row, column) of the top-left pixel of the tile `tile_m` wide at `corner`."""
         east, north = corner
         return (
-            round((self.north - north - TILE_M) * self.px_per_m),
+            round((self.north - north - tile_m) * self.px_per_m),
             round((east - self.west) * self.px_per_m),
         )
+
+    def pack_tile_corners(self):
+        """Return the (east, north) corner of every pack tile the orthophotos cover."""
+        steps = [step * PACK_TILE_M for step in range(round(TILE_M / PACK_TILE_M))]
+        return sorted(
+            (round(east + across), round(north + up))
+            for east, north in self.tile_corners
+            for across in steps
+            for up in steps
+        )
+
+    def pack_tile_window(self, corner, m_per_px):
+        """Return the slices of a pack tile in an array covering the mosaic at `m_per_px`."""
+        row, column = (
+            round(px / self.px_per_m / m_per_px) for px in self.tile_origin_px(corner, PACK_TILE_M)
+        )
+        side = round(PACK_TILE_M / m_per_px)
+        return slice(row, row + side), slice(column, column + side)
 
     def pixel(self, east, north):
         """Return the (row, column) arrays of map positions, clipped to the mosaic."""
@@ -521,12 +540,8 @@ class RoadMap:
             self._rank[window] = np.where(closer, rank - 1, self._rank[window])
 
     def tile_image(self, mosaic, corner):
-        """Return the road map of one orthophoto tile, or None when no road passes it."""
-        row, column = (
-            round(px / mosaic.px_per_m / TRACK_MAP_M_PER_PX) for px in mosaic.tile_origin_px(corner)
-        )
-        side = round(TILE_M / TRACK_MAP_M_PER_PX)
-        window = (slice(row, row + side), slice(column, column + side))
+        """Return the road map of one pack tile, or None when no road passes it."""
+        window = mosaic.pack_tile_window(corner, TRACK_MAP_M_PER_PX)
         if np.isnan(self.along[window]).all():
             return None
         return road_map_image(self.along[window], self.right[window])
@@ -722,24 +737,29 @@ class Ground:
         return ground_classes.graded(self.mosaic.rgb[rows, columns], self.grade)
 
 
-def write_tiles(directory, mosaic, image_of, mode):
-    """Write one PNG per orthophoto tile into `directory`, named `<east>_<north>.png`.
+def tile_key(corner):
+    """Return the name of the pack tile at `corner`: `<east>_<north>`."""
+    return f"{corner[0]}_{corner[1]}"
+
+
+def write_tile_maps(directory, mosaic, kind, image_of, mode):
+    """Write one PNG per pack tile into `directory`/tiles, named `<east>_<north>.<kind>.png`.
 
     `image_of(corner)` gives a tile's image, or None for a tile that gets no file.
     """
-    directory.mkdir(exist_ok=True)
-    for stale in directory.glob("*.png"):
+    tiles = directory / "tiles"
+    tiles.mkdir(exist_ok=True)
+    for stale in tiles.glob(f"*.{kind}.png"):
         stale.unlink()
-    for corner in mosaic.tile_corners:
+    for corner in mosaic.pack_tile_corners():
         image = image_of(corner)
         if image is not None:
-            Image.fromarray(image, mode).save(directory / f"{corner[0]}_{corner[1]}.png")
+            Image.fromarray(image, mode).save(tiles / f"{tile_key(corner)}.{kind}.png")
 
 
 def labels_tile(labels, mosaic, corner):
-    """Return the surface map of one orthophoto tile."""
-    row, column = mosaic.tile_origin_px(corner)
-    return labels[row : row + mosaic.tile_px, column : column + mosaic.tile_px]
+    """Return the surface map of one pack tile."""
+    return labels[mosaic.pack_tile_window(corner, 1.0 / mosaic.px_per_m)]
 
 
 def build(ground, sections, out_directory):
@@ -762,10 +782,10 @@ def build(ground, sections, out_directory):
     Image.fromarray(lines, "RGBA").save(out_directory / "road_lines.png")
     lap_map = RoadMap(mosaic)
     lap_map.lay_lap(origin, sections, lap_length_m)
-    write_tiles(
-        out_directory / "surfaces", mosaic, lambda corner: labels_tile(labels, mosaic, corner), "L"
+    write_tile_maps(
+        out_directory, mosaic, "surface", lambda corner: labels_tile(labels, mosaic, corner), "L"
     )
-    write_tiles(
-        out_directory / "track", mosaic, lambda corner: lap_map.tile_image(mosaic, corner), "RGBA"
+    write_tile_maps(
+        out_directory, mosaic, "track", lambda corner: lap_map.tile_image(mosaic, corner), "RGBA"
     )
     return round(lap_length_m, 2), lap_map, edges

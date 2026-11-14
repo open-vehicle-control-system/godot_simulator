@@ -57,6 +57,29 @@ static func intrinsics(stereo_optics: VehicleSpec.StereoOptics) -> Dictionary:
 	}
 
 
+func request_pair(deliver: Callable) -> void:
+	## Calls `deliver` with the left and right images rendered last. Where the renderer can
+	## read a texture back later, it does so within a few frames, without making this frame
+	## wait for the GPU to finish the last one; else at once.
+	var device := RenderingServer.get_rendering_device()
+	if device == null:
+		deliver.call(capture())
+		return
+	var pair: Array[Image] = [null, null]
+	for side in viewports.size():
+		var drawn := RenderingServer.texture_get_rd_texture(viewports[side].get_texture().get_rid())
+		device.texture_get_data_async(drawn, 0, _on_read_back.bind(side, pair, deliver))
+
+
 func capture() -> Array[Image]:
 	## The left and right images rendered last.
 	return [viewports[0].get_texture().get_image(), viewports[1].get_texture().get_image()]
+
+
+func _on_read_back(
+	pixels: PackedByteArray, side: int, pair: Array[Image], deliver: Callable
+) -> void:
+	var size := viewports[side].size
+	pair[side] = Image.create_from_data(size.x, size.y, false, Image.FORMAT_RGBA8, pixels)
+	if pair[0] != null and pair[1] != null and deliver.is_valid():
+		deliver.call(pair)

@@ -1,5 +1,5 @@
 extends TestCase
-## Track packs with one world scene: the world, its collision, the spawn pose and the sky.
+## Track packs: the world around the spawn, its collision, the spawn pose and the sky.
 
 
 func test_loads_the_world_with_collision_on_its_ground() -> void:
@@ -14,12 +14,11 @@ func test_loads_the_world_with_collision_on_its_ground() -> void:
 	loaded["world"].queue_free()
 
 
-func test_reports_a_world_that_does_not_load() -> void:
-	var directory := PackFixtures.fresh_directory("no_world")
-	PackFixtures.write_pack(directory, PackFixtures.track_manifest("flat"))
-	var track: TrackSpec = PackLibrary.scan([directory]).load_track("flat")["track"]
+func test_reports_a_tile_that_does_not_load() -> void:
+	var track := _flat_track("no_tile", PackFixtures.track_manifest("flat"))
+	DirAccess.remove_absolute(track.directory.path_join("tiles/a.glb"))
 
-	assert_eq(TrackWorld.load_world(track), {"error": "flat: world.glb does not load"})
+	assert_eq(TrackWorld.load_world(track), {"error": "flat: tile a: a.glb does not load"})
 
 
 func test_places_the_spawn_pose_from_ros_position_and_yaw() -> void:
@@ -47,6 +46,7 @@ func test_a_track_with_a_sky_shows_its_panorama() -> void:
 	manifest["track"]["sky"] = "sky.png"
 	var directory := PackFixtures.fresh_directory("panorama_sky")
 	var pack_directory := PackFixtures.write_pack(directory, manifest)
+	PackFixtures.write_flat_world(pack_directory, 20.0)
 	Image.create(8, 4, false, Image.FORMAT_RGB8).save_png(pack_directory.path_join("sky.png"))
 	var track: TrackSpec = PackLibrary.scan([directory]).load_track("flat")["track"]
 
@@ -70,7 +70,7 @@ func test_refuses_a_sky_that_is_not_there() -> void:
 	var directory := PackFixtures.fresh_directory("missing_sky")
 	var manifest := PackFixtures.track_manifest("flat")
 	manifest["track"]["sky"] = "sky.hdr"
-	PackFixtures.write_pack(directory, manifest)
+	PackFixtures.write_flat_world(PackFixtures.write_pack(directory, manifest), 20.0)
 
 	var found := PackLibrary.scan([directory]).load_track("flat")
 

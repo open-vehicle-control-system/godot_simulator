@@ -103,6 +103,15 @@ func test_keyboard_turns_on_driving_with_the_arrow_keys() -> void:
 	assert_true(options.keyboard)
 
 
+func test_timing_turns_on_the_frame_time_report() -> void:
+	var arguments := PackedStringArray(["--track=t", "--vehicle=v", "--timing"])
+
+	var options: SimulatorOptions = SimulatorOptions.parse(arguments)["options"]
+
+	assert_true(options.timing)
+	assert_true(not SimulatorOptions.parse(arguments.slice(0, 2))["options"].timing)
+
+
 func test_keyboard_and_link_are_exclusive() -> void:
 	var parsed := SimulatorOptions.parse(
 		PackedStringArray(["--track=t", "--vehicle=v", "--keyboard", "--link=localhost"])

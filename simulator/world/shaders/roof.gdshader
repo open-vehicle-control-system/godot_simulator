@@ -66,7 +66,9 @@ void fragment() {
 	vec3 along_rows = across * uv_down.y - down * uv_across.y;
 	vec3 up_slope = down * uv_across.x - across * uv_down.x;
 	float scale = inversesqrt(max(max(dot(along_rows, along_rows), dot(up_slope, up_slope)), 1e-12));
-	vec3 bump = texture(roofing_normal, roofing_uv).rgb * 2.0 - 1.0;
+	// The normal map stores x and y: z is what makes the normal a unit long.
+	vec3 bump = vec3(texture(roofing_normal, roofing_uv).rg * 2.0 - 1.0, 0.0);
+	bump.z = sqrt(max(1.0 - dot(bump.xy, bump.xy), 0.0));
 	vec3 world_normal = normalize(
 		along_rows * scale * bump.x + up_slope * scale * bump.y + facing * bump.z);
 	NORMAL = normalize((VIEW_MATRIX * vec4(world_normal, 0.0)).xyz);

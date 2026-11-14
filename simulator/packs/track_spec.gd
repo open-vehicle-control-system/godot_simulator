@@ -6,7 +6,9 @@ extends RefCounted
 var id: String
 var name: String
 var directory: String
-var world_path: String
+var tiles: TilesSpec
+var far_scene_path := ""  ## the coarse terrain of the whole area, or "" without one
+var far_photo_path := ""
 var sky_path := ""  ## an equirectangular panorama, or "" for a procedural sky
 var sun_given := false
 var sun_azimuth_rad := 0.0  ## towards the sun, about +Y from +Z towards +X
@@ -30,7 +32,10 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 	spec.id = manifest["id"]
 	spec.directory = directory
 	spec.name = reader.text("name")
-	spec.world_path = directory.path_join(reader.text("track.world"))
+	spec.tiles = TilesSpec.parse(reader_within_track, directory)
+	if reader.has("track.far"):
+		spec.far_scene_path = reader_within_track.file("far.scene", directory)
+		spec.far_photo_path = reader_within_track.file("far.photo", directory)
 	spec.spawn_position = reader.ros_vector("track.spawn.position_m")
 	spec.spawn_yaw_rad = deg_to_rad(reader.number("track.spawn.yaw_deg"))
 	if reader.has("track.sky"):
@@ -46,6 +51,7 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 		spec.ground = GroundSpec.parse(reader_within_track, directory)
 	if reader.has("track.surfaces"):
 		spec._read_surfaces(reader, directory)
+	spec._check_tile_maps(reader)
 	if reader.has("track.trees"):
 		spec.trees = TreesSpec.parse(reader_within_track, directory)
 	if reader.has("track.signs"):
@@ -92,8 +98,22 @@ func _read_surfaces(reader: ManifestReader, directory: String) -> void:
 			reader.error = rule_reader.error
 		if rule.kind == "terrain" and reader.error == "" and ground == null:
 			reader.error = "%s: track.surfaces needs track.ground for its terrain" % id
-		if rule.track_map_pattern != "" and reader.error == "" and ground.road_lines_path == "":
-			reader.error = "%s: track.surfaces needs track.ground.road for its track_map" % id
-		if rule.roads_map_pattern != "" and reader.error == "" and ground.roads_lines_path == "":
-			reader.error = "%s: track.surfaces needs track.ground.roads for its roads_map" % id
 		surfaces.append(rule)
+
+
+func _check_tile_maps(reader: ManifestReader) -> void:
+	## A tile's road maps need the lines images `ground` names.
+	for tile in tiles.tiles:
+		if reader.error != "":
+			return
+		var has_lines := {
+			"track": ground != null and ground.road_lines_path != "",
+			"roads": ground != null and ground.roads_lines_path != "",
+			"lots": ground != null,
+		}
+		for map in tile.maps:
+			if not has_lines[map]:
+				reader.error = (
+					"%s: tile %s has a %s map, which needs track.ground%s"
+					% [id, tile.key, map, {"track": ".road", "roads": ".roads", "lots": ""}[map]]
+				)

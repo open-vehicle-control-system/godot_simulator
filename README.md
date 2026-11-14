@@ -32,6 +32,7 @@ track pack and a vehicle pack.
 | `--spawn=X,Y,Z,YAW_DEG` | start there instead of at the track's spawn, in the track's frame as `spawn` in its `pack.json` |
 | `--eye=X,Y,Z` | look at the vehicle from this fixed point of the track's frame |
 | `--screenshot=FILE` | save the window as a PNG once the world has rendered, print what the window and the other viewports (stereo cameras, mirrors) cost to render, quit |
+| `--timing` | print when the first frame was drawn and, every five seconds, the worst frame time and how many frames ran over 33 ms |
 
 Keys: C cycles the views, V shows the stereo pair, F11 toggles full screen, Esc quits. Under
 `--keyboard` the arrow keys drive: Up accelerates, Down brakes then reverses, Left and Right steer.

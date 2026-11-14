@@ -489,9 +489,10 @@ def write(ground, surveyed, road_map, out_directory):
     """
     out_directory = Path(out_directory)
     starts, bands = lay_out([road.sections["s"][-1] for road in surveyed])
-    track_surfaces.write_tiles(
-        out_directory / "roads",
+    track_surfaces.write_tile_maps(
+        out_directory,
         ground.mosaic,
+        "roads",
         lambda corner: road_map.tile_image(ground.mosaic, corner),
         "RGBA",
     )

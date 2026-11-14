@@ -9,6 +9,6 @@ Until the builders are ported to `tools/`, `tools/pack_experiment.py` packages t
 experiment's outputs for local use:
 
 ```sh
-python3 tools/pack_experiment.py ../carla build/packs
+GODOT=godot python3 tools/pack_experiment.py ../carla build/packs
 ./simulate.sh --track=mettet --vehicle=ovcs1 --packs=build/packs
 ```

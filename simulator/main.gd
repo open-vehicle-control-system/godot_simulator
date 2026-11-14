@@ -36,16 +36,24 @@ func _ready() -> void:
 
 
 func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> String:
+	# The vehicle's model and the sky are read on worker threads while the tiles around the
+	# spawn load.
+	var model_read := {}
+	var sky_read := {}
+	var model_task := WorkerThreadPool.add_task(_read_model_into.bind(model_read, spec))
+	var sky_task := WorkerThreadPool.add_task(_read_sky_into.bind(sky_read, track))
 	var world_found := TrackWorld.load_world(track)
+	WorkerThreadPool.wait_for_task_completion(model_task)
+	WorkerThreadPool.wait_for_task_completion(sky_task)
 	if world_found.has("error"):
 		return world_found["error"]
-	var model_found := VehicleModel.build(spec)
+	var model_found := VehicleModel.build_from(spec, model_read)
 	if model_found.has("error"):
 		return model_found["error"]
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = FRAMES_PER_S
 	get_window().title = "%s, %s" % [track.name, spec.name]
-	var lighting := TrackWorld.lighting(track)
+	var lighting := TrackWorld.lighting_under(track, sky_read)
 	var world_environment := WorldEnvironment.new()
 	world_environment.environment = lighting["environment"]
 	add_child(world_environment)
@@ -56,6 +64,12 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 	var model: VehicleModel = model_found["model"]
 	vehicle.setup(spec, model)
 	vehicle.global_transform = track.spawn_transform()
+	var tiles: TrackTiles = world_found["world"]
+	tiles.follow(vehicle)
+	if options.timing:
+		var frame_times := FrameTimes.new()
+		add_child(frame_times)
+		frame_times.setup(tiles)
 	var stereo := StereoCamera.new()
 	add_child(stereo)
 	stereo.setup(vehicle, spec.stereo)
@@ -66,7 +80,7 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 		link.setup(vehicle, options.link_host, options.link_port)
 		var sender := StereoSender.new()
 		add_child(sender)
-		sender.setup(link, stereo.capture, spec.stereo.rate_hz)
+		sender.setup(link, stereo.request_pair, spec.stereo.rate_hz)
 	if options.hold_given:
 		vehicle.command(options.hold_speed_m_s, options.hold_steering_rad)
 	if options.keyboard:
@@ -105,6 +119,16 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 		add_child(viewer.mirrors)
 		return viewer.mirrors.setup(spec, model.body, lighting["environment"])
 	return ""
+
+
+static func _read_model_into(read: Dictionary, spec: VehicleSpec) -> void:
+	## Reads the vehicle's model into `read`, off the main thread.
+	read.merge(VehicleModel.read(spec))
+
+
+static func _read_sky_into(read: Dictionary, track: TrackSpec) -> void:
+	## Reads the track's sky into `read`, off the main thread.
+	read.merge(TrackWorld.read_sky(track))
 
 
 func _pack_directories(options: SimulatorOptions) -> Array[String]:

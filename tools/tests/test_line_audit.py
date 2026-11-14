@@ -18,18 +18,16 @@ import secondary_roads
 import track_surfaces
 
 
-class TwoTiles:
+class TwoTiles(track_surfaces.Mosaic):
     """A stand-in for the mosaic: two orthophoto tiles side by side, 4 px/m."""
 
-    west = 0.0
-    north = 512.0
-    px_per_m = 4.0
-    rgb = np.zeros((2048, 4096, 3), np.uint8)
-    tile_corners = [(0, 0), (512, 0)]
-
-    @staticmethod
-    def tile_origin_px(corner):
-        return (0, round(corner[0] * 4.0))
+    def __init__(self):
+        """Cover 1024 m by 512 m without reading a photo."""
+        self.west = 0.0
+        self.north = 512.0
+        self.px_per_m = 4.0
+        self.rgb = np.zeros((2048, 4096, 3), np.uint8)
+        self.tile_corners = [(0, 0), (512, 0)]
 
 
 def oblique_road_maps(directory):
@@ -43,8 +41,12 @@ def oblique_road_maps(directory):
         np.where(near, along, np.nan).astype(np.float32),
         np.where(near, right, np.nan).astype(np.float32),
     )
-    Image.fromarray(image[:, :1024], "RGBA").save(Path(directory) / "0_0.png")
-    Image.fromarray(image[:, 1024:], "RGBA").save(Path(directory) / "512_0.png")
+    mosaic = TwoTiles()
+    for corner in mosaic.pack_tile_corners():
+        window = mosaic.pack_tile_window(corner, 0.5)
+        Image.fromarray(image[window], "RGBA").save(
+            Path(directory) / f"{track_surfaces.tile_key(corner)}.roads.png"
+        )
 
 
 class MapMosaicTest(unittest.TestCase):
@@ -54,7 +56,7 @@ class MapMosaicTest(unittest.TestCase):
     def setUpClass(cls):
         with tempfile.TemporaryDirectory() as directory:
             oblique_road_maps(directory)
-            cls.road_map = audit.MapMosaic(directory, TwoTiles)
+            cls.road_map = audit.MapMosaic(directory, "roads", TwoTiles())
 
     def test_decodes_what_the_builder_encodes(self):
         along = np.array([[10000.0, np.nan]], np.float32)

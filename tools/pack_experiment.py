@@ -8,16 +8,22 @@ local use only. A circuit's world is the experiment's with its terrain rebuilt s
 LiDAR ground model (smooth_terrain.py); its surface maps and road lines are derived from its
 orthophoto (track_surfaces.py), as are the roads and parking lots OpenStreetMap maps around
 it (secondary_roads.py, parking_lots.py); its road signs stand where the map and the highway
-code put them (road_signs.py), and no tree stands on a road (drivable.py); its CC0 texture
-sets are downloaded once into OUT_DIR/../textures (fetch_textures.py). The experiment's
+code put them (road_signs.py), and no tree stands on a road (drivable.py); the whole is cut
+into the pack's tiles (track_tiles.py), the world it is cut from kept in OUT_DIR/../work. Its
+CC0 texture sets are downloaded once into OUT_DIR/../textures (fetch_textures.py) and
+compressed there with Godot's encoders (compress_textures.gd, run with the Godot named by
+the GODOT environment variable). The experiment's
 frames are Godot's (+X left, +Y up, +Z forward); pack.json takes ROS ones (x forward, y left, z up).
 
-Needs numpy and Pillow.
+Needs numpy and Pillow, and Godot 4.6 to compress the textures.
 """
 
+import io
 import json
 import math
+import os
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -34,6 +40,8 @@ import secondary_roads
 import sign_faces
 import smooth_terrain
 import track_surfaces
+import track_tiles
+from PIL import Image
 
 WALLONIA_ATTRIBUTION = [
     "Service public de Wallonie: LiDAR 2021-2022 and orthophotos 2026, CC-BY 4.0",
@@ -130,12 +138,11 @@ DEFAULT_STEREO = {
 MIRRORS = {"material": "MIRRORS", "interior_hfov_deg": 45.0, "door_hfov_deg": 30.0}
 
 
-GROUND_MAPS = {
-    "map": "surfaces/*.png",
-    "track_map": "track/*.png",
-    "roads_map": "roads/*.png",
-    "lots_map": "lots/*.png",
-}
+# How each map of a texture set is compressed (compress_textures.gd's kinds).
+TEXTURE_KINDS = {"albedo": "colour", "normal": "normal", "rough": "colour"}
+TEXTURE_SIDE_PX = 2048  # every set at one size: the ground's layers share a texture array
+TEXTURE_COMPRESSOR = Path(__file__).with_name("compress_textures.gd")
+GROUND_MESH_PREFIXES = (smooth_terrain.TERRAIN_MESH_PREFIX, smooth_terrain.ROAD_MESH_PREFIX)
 
 
 def ros(godot):
@@ -150,20 +157,7 @@ def texture_path(named):
 
 def surface_rules():
     """Return a circuit's `surfaces`: which simulator surface draws each glTF material."""
-    rules = [
-        {
-            "meshes": "Road_*",
-            "materials": "M_Ortho_*",
-            "surface": "terrain",
-            **GROUND_MAPS,
-        },
-        {
-            "meshes": "Terrain_*",
-            "materials": "M_Ortho_*",
-            "surface": "terrain",
-            **GROUND_MAPS,
-        },
-    ]
+    rules = [{"materials": track_tiles.GROUND_MATERIAL["name"], "surface": "terrain"}]
     for roofing, (textures, size_m) in ROOFINGS.items():
         rules.append(
             {
@@ -223,23 +217,58 @@ def texture_sets():
     return sorted(set(named))
 
 
+def compress_textures(jobs):
+    """Write DDS textures with Godot's encoders; a job is (kind, source image, DDS to write)."""
+    if not jobs:
+        return
+    arguments = [str(part) for job in jobs for part in job]
+    subprocess.run(
+        [os.environ.get("GODOT", "godot"), "--headless", "--script", str(TEXTURE_COMPRESSOR), "--"]
+        + arguments,
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
+
+
+def compressed_texture_sets(textures):
+    """Write every map of the texture sets in `textures` as DDS beside its JPEG, once."""
+    jobs = []
+    for named in texture_sets():
+        name = fetch_textures.set_name(named.split(":", 1)[1])
+        for kind in fetch_textures.MAPS:
+            source = textures / f"{name}_{kind}.jpg"
+            compressed = textures / f"{name}_{kind}.dds"
+            with Image.open(source) as image:
+                if image.size != (TEXTURE_SIDE_PX, TEXTURE_SIDE_PX):
+                    raise ValueError(f"{source} is not {TEXTURE_SIDE_PX} px square")
+            if not compressed.exists():
+                jobs.append((TEXTURE_KINDS[kind], source, compressed))
+    compress_textures(jobs)
+
+
 def tree_impostors(experiment):
-    """Return the `impostors` of a circuit's trees and the atlases they link to."""
+    """Return the `impostors` of a circuit's trees and the atlases they are written from."""
     atlases = experiment / "data" / "trees"
     described = json.loads((atlases / "impostors.json").read_text())
-    impostors, links = [], {}
+    impostors, sources = [], {}
     for name, impostor in described.items():
         impostors.append(
             {
-                "atlas": f"trees/{name}.png",
+                "atlas": f"trees/{name}.dds",
                 "views": impostor["views"],
                 "width_m": impostor["width"],
                 "height_m": impostor["height"],
                 "kind": impostor["kind"],
             }
         )
-        links[f"trees/{name}.png"] = atlases / f"{name}.png"
-    return impostors, links
+        sources[f"trees/{name}.dds"] = atlases / f"{name}.png"
+    return impostors, sources
+
+
+def write_tree_atlases(directory, sources):
+    """Write the impostor atlases of a pack as DDS."""
+    (directory / "trees").mkdir(parents=True, exist_ok=True)
+    compress_textures([("colour", source, directory / name) for name, source in sources.items()])
 
 
 def tree_instances(trees):
@@ -265,16 +294,17 @@ def trees_off_the_roads(trees, driven):
 
 
 def circuit_pack(experiment, track_id, circuit, textures):
-    """Return the manifest of a circuit and the files it links to."""
+    """Return the manifest of a circuit, the files it links to and its tree atlases' sources."""
     built = experiment / "data" / track_id / "godot"
     lap = json.loads((built / "track.json").read_text())
     start = lap["points"][SPAWN_INDEX]
     heading = lap["dirs"][SPAWN_INDEX]
-    impostors, links = tree_impostors(experiment)
+    impostors, atlases = tree_impostors(experiment)
+    links = {}
     for named in texture_sets():
         name = fetch_textures.set_name(named.split(":", 1)[1])
         for kind in fetch_textures.MAPS:
-            links[f"textures/{name}_{kind}.jpg"] = textures / f"{name}_{kind}.jpg"
+            links[f"textures/{name}_{kind}.dds"] = textures / f"{name}_{kind}.dds"
     links["sky.hdr"] = experiment / "data" / "sky" / "partly_cloudy_4k.hdr"
     manifest = {
         "format": 1,
@@ -291,7 +321,8 @@ def circuit_pack(experiment, track_id, circuit, textures):
             )
         ],
         "track": {
-            "world": "world.glb",
+            "tiles": "tiles.json",
+            "far": {"scene": "far.glb", "photo": "far.jpg"},
             "sky": "sky.hdr",
             "sun": SUN,
             "spawn": {
@@ -307,14 +338,17 @@ def circuit_pack(experiment, track_id, circuit, textures):
                 "slope_layer": ground_classes.MEADOW,
             },
             "surfaces": surface_rules(),
-            "trees": {"instances": "trees.json", "impostors": impostors},
+            "trees": {"impostors": impostors},
         },
     }
-    return manifest, links
+    return manifest, links, atlases
 
 
-def write_surfaces(experiment, track_id, circuit, directory, manifest):
-    """Write a circuit's world, maps and lines; name them and the photo's grade in `manifest`."""
+def write_surfaces(experiment, track_id, circuit, directory, work, manifest):
+    """Write a circuit's tiles, maps and lines; name them and the photo's grade in `manifest`.
+
+    The whole world the tiles are cut from is written into `work`.
+    """
     data = experiment / "data" / track_id
     frame = json.loads((data / "frame.json").read_text())
     sections = json.loads((data / "build" / f"{circuit['build']}.sections.json").read_text())
@@ -373,16 +407,16 @@ def write_surfaces(experiment, track_id, circuit, directory, manifest):
     print(
         f"{track_id}: {len(standing) - len(kept)} of {len(standing)} trees stood on a road or a lot"
     )
-    (directory / "trees.json").write_text(json.dumps(tree_instances(kept)))
+    work.mkdir(parents=True, exist_ok=True)
     height_m = smooth_terrain.write_smoothed_world(
         data / "godot" / "world.glb",
-        directory / "world.glb",
+        work / "world.glb",
         experiment / frame["dtm"],
         frame["origin"],
         [lot.outline for lot in lots if lot.outline is not None],
     )
 
-    write_signs(signs, height_m, directory, manifest)
+    placed = write_signs(signs, height_m, directory, manifest)
     print(f"{track_id} signs: {signs.counts()}")
     for reason, sign in signs.unplaced:
         print(f"{track_id} sign not placed, {reason}: {sign}")
@@ -390,7 +424,43 @@ def write_surfaces(experiment, track_id, circuit, directory, manifest):
     def photo_albedo(x, z):
         return surveyed.albedo_at(*surveyed.pixel(x, -z))
 
-    print(f"{track_id} roofs: {roofs.write_roofs(directory / 'world.glb', photo_albedo)}")
+    print(f"{track_id} roofs: {roofs.write_roofs(work / 'world.glb', photo_albedo)}")
+    homeless = track_tiles.write(
+        work / "world.glb",
+        directory,
+        mosaic,
+        world_photo(data / "godot" / "world.glb", mosaic),
+        origin,
+        track_surfaces.PACK_TILE_M,
+        GROUND_MESH_PREFIXES,
+        tree_instances(kept),
+        placed,
+    )
+    tile_count = len(json.loads((directory / "tiles.json").read_text())["tiles"])
+    print(f"{track_id}: {tile_count} tiles; {homeless} trees and sign parts stood on none")
+
+
+def world_photo(world_glb, mosaic):
+    """Return the photo the experiment's world draws its ground with, laid out as the mosaic.
+
+    Each `M_Ortho_<east>_<north>` material of the world carries the photo of one orthophoto
+    tile, as the experiment toned it.
+    """
+    gltf, binary = smooth_terrain.read_glb(world_glb)
+    photo = np.zeros_like(mosaic.rgb)
+    for material in gltf["materials"]:
+        if not material["name"].startswith(roofs.ROOF_MATERIAL_PREFIX):
+            continue
+        east, north = material["name"][len(roofs.ROOF_MATERIAL_PREFIX) :].split("_")
+        texture = gltf["textures"][material["pbrMetallicRoughness"]["baseColorTexture"]["index"]]
+        view = gltf["bufferViews"][gltf["images"][texture["source"]]["bufferView"]]
+        start = view.get("byteOffset", 0)
+        image = Image.open(io.BytesIO(bytes(binary[start : start + view["byteLength"]])))
+        row, column = mosaic.tile_origin_px((int(east), int(north)))
+        photo[row : row + mosaic.tile_px, column : column + mosaic.tile_px] = np.asarray(
+            image.convert("RGB")
+        )
+    return photo
 
 
 def sign_site(extract, driven, terrain, ground):
@@ -421,8 +491,7 @@ def sign_site(extract, driven, terrain, ground):
 
 
 def write_signs(signs, height_m, directory, manifest):
-    """Write a circuit's signs.json and sign faces; name them in `manifest`."""
-    (directory / "signs.json").write_text(json.dumps(road_signs.described(signs, height_m)))
+    """Write a circuit's sign faces and name them in `manifest`; return its placed signs."""
     faces = directory / "signs"
     faces.mkdir(exist_ok=True)
     for stale in faces.glob("*.png"):
@@ -432,6 +501,7 @@ def write_signs(signs, height_m, directory, manifest):
     manifest["track"]["signs"] = road_signs.manifest(signs, "signs")
     if signs.faces():
         manifest["attribution"].append(sign_faces.SOURCE)
+    return road_signs.described(signs, height_m)
 
 
 def instruments(profile):
@@ -550,10 +620,13 @@ def write_pack(out, manifest, links):
 
 def write_circuit(experiment, out, textures, track_id, circuit):
     """Write a circuit's pack with what is derived from its orthophoto."""
-    manifest, links = circuit_pack(experiment, track_id, circuit, textures)
+    manifest, links, atlases = circuit_pack(experiment, track_id, circuit, textures)
     directory = out / track_id
     directory.mkdir(parents=True, exist_ok=True)
-    write_surfaces(experiment, track_id, circuit, directory, manifest)
+    write_tree_atlases(directory, atlases)
+    write_surfaces(
+        experiment, track_id, circuit, directory, out.parent / "work" / track_id, manifest
+    )
     write_pack(out, manifest, links)
 
 
@@ -561,6 +634,7 @@ def main(experiment, out, only):
     """Write every pack the experiment has outputs for, or the circuits `only` names."""
     textures = out.parent / "textures"
     fetch_textures.main(textures, texture_sets())
+    compressed_texture_sets(textures)
     for track_id, circuit in CIRCUITS.items():
         if only and track_id not in only:
             continue

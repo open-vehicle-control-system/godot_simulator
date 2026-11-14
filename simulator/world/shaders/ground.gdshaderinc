@@ -54,6 +54,12 @@ float line_cover(float off_m, float half_width_m, float soft_m) {
 	return 1.0 - smoothstep(half_width_m - 0.5 * soft_m, half_width_m + 0.5 * soft_m, abs(off_m));
 }
 
+// A normal map's texel: it stores x and y, z is what makes the normal a unit long.
+vec3 stored_normal(vec2 stored) {
+	vec2 across = stored * 2.0 - 1.0;
+	return vec3(stored, 0.5 + 0.5 * sqrt(max(1.0 - dot(across, across), 0.0)));
+}
+
 vec3 photo_albedo(vec2 uv) {
 	return graded(texture(photo, uv).rgb);
 }
@@ -143,7 +149,8 @@ Ground ground_layers(
 			vec3 fine = textureGrad(layer_albedo, fine_at, across / size_m, down / size_m).rgb;
 			float variation = dot(coarse, vec3(0.333)) / max(dot(mean, vec3(0.333)), 1e-3);
 			albedo = mix(fine * mix(1.0, variation, 0.6), coarse, to_coarse);
-			normal = mix(textureGrad(layer_normal, fine_at, across / size_m, down / size_m).rgb,
+			normal = mix(
+				stored_normal(textureGrad(layer_normal, fine_at, across / size_m, down / size_m).rg),
 				normal, to_coarse);
 			roughness = mix(textureGrad(layer_roughness, fine_at, across / size_m, down / size_m).r,
 				roughness, to_coarse);

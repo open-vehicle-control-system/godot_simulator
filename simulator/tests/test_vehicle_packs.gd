@@ -104,7 +104,7 @@ func test_reports_a_model_without_a_body() -> void:
 	var pack_directory := PackFixtures.write_pack(directory, manifest)
 	PackFixtures.write_flat_world(pack_directory, 4.0)
 	DirAccess.rename_absolute(
-		pack_directory.path_join("world.glb"), pack_directory.path_join("vehicle.glb")
+		pack_directory.path_join("tiles/a.glb"), pack_directory.path_join("vehicle.glb")
 	)
 	var vehicle: VehicleSpec = PackLibrary.scan([directory]).load_vehicle("small_car")["vehicle"]
 

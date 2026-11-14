@@ -16,9 +16,28 @@ var cockpit_parts: Array[Node3D] = []
 
 static func build(spec: VehicleSpec) -> Dictionary:
 	## `{"model": VehicleModel}`, or `{"error": reason}` when the pack's glTF is unusable.
+	return build_from(spec, read(spec))
+
+
+static func read(spec: VehicleSpec) -> Dictionary:
+	## What `build_from` builds the model from: the pack's glTF as parsed, `{}` for a pack
+	## without one, or `{"error": reason}`. Touches no scene, so it runs on a worker thread.
 	if spec.model_path == "":
+		return {}
+	var document := GLTFDocument.new()
+	var state := GLTFState.new()
+	if document.append_from_file(spec.model_path, state) != OK:
+		return {"error": "%s: %s does not load" % [spec.id, spec.model_path.get_file()]}
+	return {"document": document, "state": state}
+
+
+static func build_from(spec: VehicleSpec, parsed: Dictionary) -> Dictionary:
+	## `{"model": VehicleModel}` from what `read` returned, or `{"error": reason}`.
+	if parsed.has("error"):
+		return parsed
+	if parsed.is_empty():
 		return {"model": _placeholder(spec)}
-	return _from_gltf(spec)
+	return _from_gltf(spec, parsed["document"], parsed["state"])
 
 
 func free_all() -> void:
@@ -28,12 +47,8 @@ func free_all() -> void:
 			part.free()
 
 
-static func _from_gltf(spec: VehicleSpec) -> Dictionary:
+static func _from_gltf(spec: VehicleSpec, document: GLTFDocument, state: GLTFState) -> Dictionary:
 	var file_name := spec.model_path.get_file()
-	var document := GLTFDocument.new()
-	var state := GLTFState.new()
-	if document.append_from_file(spec.model_path, state) != OK:
-		return {"error": "%s: %s does not load" % [spec.id, file_name]}
 	var scene := document.generate_scene(state)
 	var model := VehicleModel.new()
 	model.body = _detach(scene, scene.find_child("Body", true, false))

@@ -94,7 +94,7 @@ class Site:
 class Placement:
     """The signs of an area and what could not be placed.
 
-    Posts, plates and signals are as signs.json holds them, but for their place: `at` (east,
+    Posts, plates and signals are as a pack's tiles list them, but for their place: `at` (east,
     north) and `above_m`, the height above the ground at the post's foot.
     """
 
@@ -769,7 +769,7 @@ def _stand_signal(surveyed, index, along_m, heading, side, sign, site):
 
 
 def described(placement, height_m):
-    """Return a Placement as signs.json holds it, in the pack's frame (x south, y east).
+    """Return a Placement as a pack's tiles list it, in the pack's frame (x south, y east).
 
     `height_m(x, y)` is the ground's height: everything on a post stands on the ground at
     the post's foot.
@@ -788,9 +788,8 @@ def described(placement, height_m):
 
 
 def manifest(placement, faces_directory):
-    """Return a pack's `signs`: the placed signs' file, their faces and the signal head."""
+    """Return a pack's `signs`: the placed signs' faces and the signal head."""
     return {
-        "placed": "signs.json",
         "faces": [
             {
                 "id": identifier,

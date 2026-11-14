@@ -18,6 +18,8 @@ extends RefCounted
 ##                           the track's frame, as `spawn` in its pack.json
 ##   --eye=X,Y,Z             look at the vehicle from this fixed point of the track's frame
 ##   --screenshot=FILE       save the window as a PNG once the world has rendered, then quit
+##   --timing                report when the first frame was drawn and, every few seconds,
+##                           the worst frame time
 
 const DEFAULT_LINK_PORT := 7400
 
@@ -39,6 +41,7 @@ var spawn_yaw_deg := 0.0
 var eye_given := false
 var eye_position_m := Vector3.ZERO  ## the track's ROS frame: x, y, z up
 var screenshot_path := ""
+var timing := false
 
 
 static func parse(arguments: PackedStringArray) -> Dictionary:
@@ -97,6 +100,8 @@ func _read_switch(option: String) -> String:
 			show_stereo = true
 		"--keyboard":
 			keyboard = true
+		"--timing":
+			timing = true
 		_:
 			return "unknown option %s" % option
 	return ""

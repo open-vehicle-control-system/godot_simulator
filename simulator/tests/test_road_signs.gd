@@ -13,7 +13,6 @@ const PLACED := {
 func test_reads_the_signs_of_the_pack() -> void:
 	var track := _track("reads", PackFixtures.signs_manifest("signed"), PLACED)
 
-	assert_true(track.signs.placed_path.ends_with("signs.json"))
 	assert_eq(track.signs.faces.size(), 1)
 	assert_true(track.signs.face("square").image_path.ends_with("signs/square.png"))
 	assert_eq(track.signs.face("square").outline[2], Vector2(0.3, 0.3))
@@ -23,8 +22,6 @@ func test_reads_the_signs_of_the_pack() -> void:
 
 func test_refuses_signs_a_pack_gets_wrong() -> void:
 	var cases := {
-		"signed: track.signs.placed names placed.json, which is not in the pack":
-		func(signs): signs["placed"] = "placed.json",
 		"signed: track.signs.faces[0].image names signs/none.png, which is not in the pack":
 		func(signs): signs["faces"][0]["image"] = "signs/none.png",
 		"signed: track.signs.faces[0].outline_m is out of range":
@@ -38,7 +35,9 @@ func test_refuses_signs_a_pack_gets_wrong() -> void:
 		var manifest := PackFixtures.signs_manifest("signed")
 		cases[reason].call(manifest["track"]["signs"])
 		var directory := PackFixtures.fresh_directory("refuses_signs")
-		PackFixtures.write_signs_files(PackFixtures.write_pack(directory, manifest), PLACED)
+		var pack_directory := PackFixtures.write_pack(directory, manifest)
+		PackFixtures.write_flat_world(pack_directory, 20.0)
+		PackFixtures.write_signs_files(pack_directory, PLACED)
 
 		assert_eq(PackLibrary.scan([directory]).load_track("signed"), {"error": reason})
 
@@ -49,7 +48,7 @@ func test_stands_plates_posts_and_signals_in_a_batch_each() -> void:
 	var loaded := TrackWorld.load_world(track)
 
 	for batch in ["Plates square", "Posts", "Signals"]:
-		var stood: MultiMeshInstance3D = loaded["world"].get_node("RoadSigns").get_node(batch)
+		var stood: MultiMeshInstance3D = loaded["world"].get_node("Tile_a").get_node(batch)
 		assert_eq(stood.multimesh.instance_count, 1, batch)
 	loaded["world"].free()
 
@@ -108,7 +107,7 @@ func test_refuses_placed_signs_that_name_no_face() -> void:
 
 	assert_eq(
 		TrackWorld.load_world(track),
-		{"error": "signed: signs.json: plates[0].face is not one of square"}
+		{"error": "signed: tile a: a.json: plates[0].face is not one of square"}
 	)
 
 

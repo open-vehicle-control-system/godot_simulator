@@ -62,7 +62,7 @@ func test_sends_jpeg_pairs_at_the_camera_rate_with_one_time_per_pair() -> void:
 	var sender := StereoSender.new()
 	add_child(sender)
 
-	sender.setup(link, _solid_pair, 10.0)
+	sender.setup(link, _hand_over_solid_pair, 10.0)
 	await _poll_until(server, func(): return not server.of_type("image").is_empty())
 	var started_s: float = server.of_type("image")[0]["time_s"]
 	await _poll_until(server, func(): return link.time_s - started_s >= 1.1)
@@ -78,6 +78,34 @@ func test_sends_jpeg_pairs_at_the_camera_rate_with_one_time_per_pair() -> void:
 	var first_body: PackedByteArray = server.bodies[server.headers.find(images[0])]
 	assert_eq(first_body.slice(0, 2), PackedByteArray([0xFF, 0xD8]), "a JPEG")
 	server.stop()
+
+
+func test_a_pair_handed_over_later_carries_the_time_it_was_asked_for() -> void:
+	var server := LinkTestServer.new()
+	var vehicle := await _vehicle()
+	var link := SimulatorLink.new()
+	add_child(link)
+	link.setup(vehicle, "127.0.0.1", server.port)
+	await _poll_until(server, func(): return link.connected and link.time_s > 0.5)
+	var sender := StereoSender.new()
+	add_child(sender)
+	var asked := []  # [time asked at, the function to hand the pair to]
+
+	sender.setup(link, func(deliver): asked.append([link.time_s, deliver]), 10.0)
+	await _poll_until(server, func(): return not asked.is_empty())
+	await _poll_frames(server, 30)
+	assert_eq(asked.size(), 1, "asked again before the pair was handed over")
+	asked[0][1].call(_solid_pair())
+	await _poll_until(server, func(): return server.of_type("image").size() >= 2)
+
+	# The pair shows the frame drawn one step before it was asked for.
+	var step_s := 1.0 / Engine.physics_ticks_per_second
+	assert_almost_eq(server.of_type("image")[0]["time_s"], asked[0][0] - step_s, step_s + 1e-3)
+	server.stop()
+
+
+func _hand_over_solid_pair(deliver: Callable) -> void:
+	deliver.call(_solid_pair())
 
 
 func _solid_pair() -> Array[Image]:

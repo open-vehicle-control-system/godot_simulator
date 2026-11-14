@@ -1,7 +1,7 @@
 class_name SignsSpec
 extends RefCounted
-## A track pack's `signs`: where its road signs and traffic signals stand, the faces of the
-## signs and the size of a signal's lenses.
+## A track pack's `signs`: the faces of the road signs its tiles list, and the size and cycle
+## of their traffic signals.
 
 const MIN_OUTLINE_POINTS := 3
 
@@ -13,7 +13,6 @@ class Face:
 	var outline := PackedVector2Array()  ## convex, metres about the plate's centre, y up
 
 
-var placed_path: String
 var faces: Array[Face] = []
 var lens_diameter_m: float
 var green_s: float
@@ -24,7 +23,6 @@ var red_s: float
 static func parse(reader: ManifestReader, directory: String) -> SignsSpec:
 	## The signs at `signs` in `reader`; `reader.error` tells what is wrong with them.
 	var signs := SignsSpec.new()
-	signs.placed_path = reader.file("signs.placed", directory)
 	for face_reader in reader.readers("signs.faces"):
 		var face := Face.new()
 		face.id = face_reader.text("id")

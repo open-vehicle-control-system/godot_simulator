@@ -605,13 +605,8 @@ class LotMap:
         self.edge_m[window] = np.where(closer, edge_m, self.edge_m[window])
 
     def tile_image(self, corner):
-        """Return the lot map of one orthophoto tile, or None when no lot touches it."""
-        mosaic = self.ground.mosaic
-        row, column = (
-            round(px / mosaic.px_per_m / self.cell_m) for px in mosaic.tile_origin_px(corner)
-        )
-        side = round(track_surfaces.TILE_M / self.cell_m)
-        window = (slice(row, row + side), slice(column, column + side))
+        """Return the lot map of one pack tile, or None when no lot touches it."""
+        window = self.ground.mosaic.pack_tile_window(corner, self.cell_m)
         if not self.lot[window].any():
             return None
         return lot_map_image(self.lot[window], self.edge_m[window])
@@ -669,6 +664,6 @@ def build(ground, extract, inside_roads_m, kept_clear, out_directory):
     for lot in survey_yards(ground, taken, buildings, ways)[: MAX_LOTS - len(lots)]:
         lots.append(lot)
         lot_map.lay(len(lots), lot)
-    track_surfaces.write_tiles(out_directory / "lots", ground.mosaic, lot_map.tile_image, "RGB")
+    track_surfaces.write_tile_maps(out_directory, ground.mosaic, "lots", lot_map.tile_image, "RGB")
     (out_directory / "lots.json").write_text(json.dumps([described(lot) for lot in lots]))
     return lots, lot_map.edge_m

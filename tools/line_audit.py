@@ -26,7 +26,7 @@ import secondary_roads
 import track_surfaces
 from PIL import Image, ImageDraw
 
-MAP_TILE_PX = round(track_surfaces.TILE_M / track_surfaces.TRACK_MAP_M_PER_PX)
+MAP_TILE_PX = round(track_surfaces.PACK_TILE_M / track_surfaces.TRACK_MAP_M_PER_PX)
 SEAM_M = 8.0  # the terrain shader's: texels further apart along a road are not blended
 LINE_WIDTH_M = 0.15
 KERB_FROM_M = 0.05
@@ -92,8 +92,8 @@ def decode_road_map(image):
 class MapMosaic:
     """A pack's road maps as one array each, read where the terrain shader reads them."""
 
-    def __init__(self, directory, mosaic):
-        """Read the `<east>_<north>.png` road maps of `directory` onto `mosaic`'s ground."""
+    def __init__(self, directory, kind, mosaic):
+        """Read the `<east>_<north>.<kind>.png` road maps of `directory` onto `mosaic`'s ground."""
         self.west, self.north = mosaic.west, mosaic.north
         shape = tuple(
             round(side / mosaic.px_per_m / track_surfaces.TRACK_MAP_M_PER_PX)
@@ -101,15 +101,11 @@ class MapMosaic:
         )
         self.along = np.full(shape, np.nan)
         self.right = np.full(shape, np.nan)
-        for corner in mosaic.tile_corners:
-            path = Path(directory) / f"{corner[0]}_{corner[1]}.png"
+        for corner in mosaic.pack_tile_corners():
+            path = Path(directory) / f"{track_surfaces.tile_key(corner)}.{kind}.png"
             if not path.exists():
                 continue
-            row, column = (
-                round(px / mosaic.px_per_m / track_surfaces.TRACK_MAP_M_PER_PX)
-                for px in mosaic.tile_origin_px(corner)
-            )
-            window = (slice(row, row + MAP_TILE_PX), slice(column, column + MAP_TILE_PX))
+            window = mosaic.pack_tile_window(corner, track_surfaces.TRACK_MAP_M_PER_PX)
             self.along[window], self.right[window] = decode_road_map(
                 np.asarray(Image.open(path).convert("RGBA"))
             )
@@ -503,8 +499,8 @@ class Audit:
         self.labels = track_surfaces.classify_mosaic(self.mosaic.rgb, self.ground["photo_grade"])
         self.extract = osm.read(data / f"{track_id}_area.osm", self.origin)
         self.lap_length_m = self.ground["road"]["lap_length_m"]
-        self.lap_map = MapMosaic(self.pack / "track", self.mosaic)
-        self.roads_map = MapMosaic(self.pack / "roads", self.mosaic)
+        self.lap_map = MapMosaic(self.pack / "tiles", "track", self.mosaic)
+        self.roads_map = MapMosaic(self.pack / "tiles", "roads", self.mosaic)
         self.lap_lines = np.asarray(Image.open(self.pack / "road_lines.png").convert("RGBA"))
         self.roads_lines = np.asarray(Image.open(self.pack / "roads_lines.png").convert("RGBA"))
 

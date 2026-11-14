@@ -28,14 +28,6 @@ func test_a_rule_covers_the_meshes_and_materials_its_globs_match() -> void:
 		assert_eq(track.surface_rule(names[0], names[1]) != null, cases[names], str(names))
 
 
-func test_a_map_is_named_after_what_the_material_glob_matched() -> void:
-	var track := _ground_track("map_name", PackFixtures.ground_manifest("ground"))
-	var rule := track.surface_rule("Terrain_x", "M_Photo_670012_610012")
-
-	assert_true(rule.map_path("M_Photo_670012_610012").ends_with("surfaces/670012_610012.png"))
-	assert_true(rule.track_map_path("M_Photo_670012_610012").ends_with("track/670012_610012.png"))
-
-
 func test_the_first_rule_that_covers_a_material_draws_it() -> void:
 	var manifest := PackFixtures.ground_manifest("ground")
 	manifest["track"]["surfaces"].append(
@@ -52,7 +44,7 @@ func test_refuses_what_a_pack_gets_wrong() -> void:
 		"ground: track.surfaces[0].surface is not one of terrain, roof, facade, plain, seats":
 		func(track): track["surfaces"][0]["surface"] = "water",
 		(
-			"ground: track.ground.layers[0].textures names textures/moss_albedo.jpg,"
+			"ground: track.ground.layers[0].textures names textures/moss_albedo.dds,"
 			+ " which is not in the pack"
 		):
 		func(track): track["ground"]["layers"][0]["textures"] = "textures/moss",
@@ -64,20 +56,23 @@ func test_refuses_what_a_pack_gets_wrong() -> void:
 		func(track): track["ground"]["road"]["lines"] = "lines.png",
 		"ground: track.surfaces needs track.ground for its terrain":
 		func(track): track.erase("ground"),
-		"ground: track.surfaces needs track.ground.road for its track_map":
-		func(track): track["ground"].erase("road"),
 		"ground: track.surfaces[1].windows is not one of house, hall, office":
 		func(track): _add_facade_with_shop_windows(track),
 		"ground: track.sun.elevation_deg is out of range":
 		func(track): track["sun"] = {"azimuth_deg": 10.0, "elevation_deg": 95.0},
-		"ground: track.trees.instances names trees.json, which is not in the pack":
-		func(track): track["trees"] = {"instances": "trees.json", "impostors": []},
+		"ground: track.trees.impostors is out of range":
+		func(track): track["trees"] = {"impostors": []},
+		"ground: track.tiles names tiles.json, which is not in the pack":
+		func(track): track["tiles"] = "tiles.json",
 	}
 	for reason in cases:
 		var manifest := PackFixtures.ground_manifest("ground")
 		cases[reason].call(manifest["track"])
 		var directory := PackFixtures.fresh_directory("refuses")
-		PackFixtures.write_ground_files(PackFixtures.write_pack(directory, manifest))
+		var pack_directory := PackFixtures.write_pack(directory, manifest)
+		PackFixtures.write_ground_files(pack_directory)
+		if not reason.contains("track.tiles"):
+			PackFixtures.write_photo_world(pack_directory, "M_Photo_a")
 
 		assert_eq(PackLibrary.scan([directory]).load_track("ground"), {"error": reason})
 
@@ -100,14 +95,12 @@ func test_reads_the_roads_and_parking_lots_on_the_ground() -> void:
 	assert_almost_eq(lot.rows[0].along_m, Vector2(-10.0, 15.0))
 	assert_almost_eq(lot.rows[0].across_m, Vector2(2.0, 7.0))
 	assert_almost_eq(lot.rows[0].ends, Vector2(1.0, 0.0))
-	var rule := track.surface_rule("Terrain_x", "M_Photo_a")
-	assert_true(rule.roads_map_path("M_Photo_a").ends_with("roads/a.png"))
-	assert_true(rule.lots_map_path("M_Photo_a").ends_with("lots/a.png"))
+	assert_eq(track.tiles.tiles[0].maps, ["roads"] as Array[String])
 
 
 func test_refuses_roads_and_lots_a_pack_gets_wrong() -> void:
 	var cases := {
-		"ground: track.surfaces needs track.ground.roads for its roads_map":
+		"ground: tile a has a roads map, which needs track.ground.roads":
 		func(track, _lots): track["ground"].erase("roads"),
 		"ground: track.ground.roads.lines names lines.png, which is not in the pack":
 		func(track, _lots): track["ground"]["roads"]["lines"] = "lines.png",
@@ -132,6 +125,7 @@ func test_refuses_roads_and_lots_a_pack_gets_wrong() -> void:
 		cases[reason].call(manifest["track"], lots)
 		var directory := PackFixtures.fresh_directory("refuses_lots")
 		var pack_directory := PackFixtures.write_pack(directory, manifest)
+		PackFixtures.write_photo_world(pack_directory, "M_Photo_a", ["roads"])
 		PackFixtures.write_ground_files(pack_directory)
 		_write_roads_and_lots(pack_directory, lots)
 
@@ -143,7 +137,7 @@ func test_draws_the_roads_and_lots_with_the_terrain_surface() -> void:
 
 	var loaded := TrackWorld.load_world(track)
 
-	var ground: MeshInstance3D = loaded["world"].find_child("Terrain_a")
+	var ground: MeshInstance3D = loaded["world"].find_child("Terrain_a", true, false)
 	var material := ground.get_surface_override_material(0) as ShaderMaterial
 	assert_true(material.get_shader_parameter("roads_lines") is Texture2D)
 	assert_eq(
@@ -186,7 +180,7 @@ func test_draws_the_ground_with_the_terrain_surface() -> void:
 
 	var loaded := TrackWorld.load_world(track)
 
-	var ground: MeshInstance3D = loaded["world"].find_child("Terrain_a")
+	var ground: MeshInstance3D = loaded["world"].find_child("Terrain_a", true, false)
 	var material := ground.get_surface_override_material(0) as ShaderMaterial
 	assert_true(material != null, "the ground keeps its glTF material")
 	assert_eq(material.shader.resource_path, "res://world/shaders/terrain.gdshader")
@@ -204,41 +198,51 @@ func test_a_material_no_rule_covers_keeps_its_gltf_definition() -> void:
 
 	var loaded := TrackWorld.load_world(track)
 
-	var ground: MeshInstance3D = loaded["world"].find_child("Terrain_a")
+	var ground: MeshInstance3D = loaded["world"].find_child("Terrain_a", true, false)
 	assert_true(ground.get_surface_override_material(0) == null, "the ground's material changed")
 	loaded["world"].free()
 
 
 func test_reports_a_surface_map_that_is_not_there() -> void:
-	var manifest := PackFixtures.ground_manifest("ground")
-	manifest["track"]["surfaces"][0]["map"] = "maps/*.png"
-	var track := _ground_track("no_map", manifest)
+	var track := _ground_track("no_map", PackFixtures.ground_manifest("ground"))
+	DirAccess.remove_absolute(track.directory.path_join("tiles/a.surface.png"))
 
 	assert_eq(
-		TrackWorld.load_world(track), {"error": "ground: the surface map a.png is not in the pack"}
+		TrackWorld.load_world(track), {"error": "ground: tile a: a.surface.png is not in the pack"}
+	)
+
+
+func test_refuses_a_tile_whose_road_map_has_no_lines_image() -> void:
+	var manifest := PackFixtures.ground_manifest("ground")
+	manifest["track"]["ground"].erase("road")
+	var directory := PackFixtures.fresh_directory("no_lines")
+	var pack_directory := PackFixtures.write_pack(directory, manifest)
+	PackFixtures.write_photo_world(pack_directory, "M_Photo_a", ["track"])
+	PackFixtures.write_ground_files(pack_directory)
+
+	assert_eq(
+		PackLibrary.scan([directory]).load_track("ground"),
+		{"error": "ground: tile a has a track map, which needs track.ground.road"}
 	)
 
 
 func test_plants_the_trees_of_the_pack() -> void:
 	var manifest := PackFixtures.track_manifest("flat")
 	manifest["track"]["trees"] = {
-		"instances": "trees.json",
 		"impostors":
-		[{"atlas": "fir.png", "views": 3, "width_m": 6.0, "height_m": 18.0, "kind": "conifer"}],
+		[{"atlas": "fir.dds", "views": 3, "width_m": 6.0, "height_m": 18.0, "kind": "conifer"}],
 	}
 	var directory := PackFixtures.fresh_directory("trees")
 	var pack_directory := PackFixtures.write_pack(directory, manifest)
 	PackFixtures.write_flat_world(pack_directory, 20.0)
-	PackFixtures.write_image(pack_directory, "fir.png", Color.GREEN)
+	PackFixtures.write_dds(pack_directory, "fir.dds", Color.GREEN)
 	var standing := {"conifer": [[5.0, 2.0, 1.0, 12.0], [6.0, -3.0, 0.5, 20.0]], "broadleaf": []}
-	var file := FileAccess.open(pack_directory.path_join("trees.json"), FileAccess.WRITE)
-	file.store_string(JSON.stringify(standing))
-	file.close()
+	PackFixtures.write_tile_objects(pack_directory, "a", {"trees": standing})
 	var track: TrackSpec = PackLibrary.scan([directory]).load_track("flat")["track"]
 
 	var loaded := TrackWorld.load_world(track)
 
-	var batch: MultiMeshInstance3D = loaded["world"].get_node("Forest").get_child(0)
+	var batch: MultiMeshInstance3D = loaded["world"].get_node("Tile_a/Trees 0")
 	assert_eq(batch.multimesh.instance_count, 2)
 	assert_almost_eq(Forest.standing_at(standing["conifer"][0]), Vector3(2.0, 1.0, 5.0))
 	loaded["world"].free()
@@ -262,6 +266,7 @@ func test_a_sky_is_turned_so_its_sun_is_where_the_light_comes_from() -> void:
 	manifest["track"]["sun"] = {"azimuth_deg": 0.0, "elevation_deg": 45.0}
 	var directory := PackFixtures.fresh_directory("sky_turn")
 	var pack_directory := PackFixtures.write_pack(directory, manifest)
+	PackFixtures.write_flat_world(pack_directory, 20.0)
 	var panorama := Image.create_empty(64, 32, false, Image.FORMAT_RGB8)
 	panorama.fill(Color(0.1, 0.1, 0.2))
 	panorama.fill_rect(Rect2i(47, 7, 2, 2), Color.WHITE)  # the sun towards +X
@@ -277,9 +282,10 @@ func test_a_sky_is_turned_so_its_sun_is_where_the_light_comes_from() -> void:
 func _ground_track(test_name: String, manifest: Dictionary) -> TrackSpec:
 	var directory := PackFixtures.fresh_directory(test_name)
 	var pack_directory := PackFixtures.write_pack(directory, manifest)
-	PackFixtures.write_photo_world(pack_directory, "M_Photo_a")
+	var has_roads: bool = manifest["track"].get("ground", {}).has("roads")
+	PackFixtures.write_photo_world(pack_directory, "M_Photo_a", ["roads"] if has_roads else [])
 	PackFixtures.write_ground_files(pack_directory)
-	if manifest["track"].get("ground", {}).has("roads"):
+	if has_roads:
 		_write_roads_and_lots(pack_directory, _lots())
 	var found := PackLibrary.scan([directory]).load_track(manifest["id"])
 	if found.has("error"):
@@ -297,8 +303,6 @@ func _manifest_with_roads_and_lots() -> Dictionary:
 		"lines": "roads_lines.png", "dashes_m": [[2.5, 10.0], [1.25, 1.25]], "line_width_m": 0.15
 	}
 	ground["lots"] = "lots.json"
-	manifest["track"]["surfaces"][0]["roads_map"] = "roads/*.png"
-	manifest["track"]["surfaces"][0]["lots_map"] = "lots/*.png"
 	return manifest
 
 
@@ -317,7 +321,7 @@ func _lots() -> Array:
 
 func _write_roads_and_lots(pack_directory: String, lots: Array) -> void:
 	PackFixtures.write_image(pack_directory, "roads_lines.png", Color(0.2, 0.2, 0.0, 1.0))
-	PackFixtures.write_image(pack_directory, "roads/a.png", Color(0.0, 0.0, 0.5, 0.5))
+	PackFixtures.write_image(pack_directory, "tiles/a.roads.png", Color(0.0, 0.0, 0.5, 0.5))
 	var file := FileAccess.open(pack_directory.path_join("lots.json"), FileAccess.WRITE)
 	file.store_string(JSON.stringify(lots))
 	file.close()
