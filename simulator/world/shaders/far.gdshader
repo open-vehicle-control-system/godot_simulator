@@ -2,6 +2,8 @@
 shader_type spatial;
 render_mode cull_disabled;
 
+#include "res://sensors/shaders/label.gdshaderinc"
+
 const float BRIGHTEST_ALBEDO = 0.55;
 
 uniform sampler2D photo : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
@@ -18,4 +20,5 @@ void fragment() {
 	ALBEDO = clamp(mix(vec3(grey), albedo, photo_saturation), vec3(0.0), vec3(BRIGHTEST_ALBEDO));
 	ROUGHNESS = 0.9;
 	SPECULAR = 0.35;
+	LABEL_AS(CLASS_TERRAIN)
 }

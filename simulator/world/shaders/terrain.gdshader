@@ -7,6 +7,8 @@
 shader_type spatial;
 render_mode cull_back;
 
+#include "res://sensors/shaders/label.gdshaderinc"
+
 #include "ground.gdshaderinc"
 
 const float BORDER_SHARPNESS = 4.0;
@@ -214,6 +216,7 @@ void fragment() {
 	float ground_soft_m = clamp(length(fwidth(world_xz)), 0.004, MAX_SOFT_M);
 	float marking = 0.0;
 	float joints = 0.0;
+	float paved = 0.0;
 
 	// A road around the lap is its fitted model: its layer and colour between its edges,
 	// whatever the photo's pixels show there, and the markings painted on it.
@@ -239,6 +242,7 @@ void fragment() {
 			+ clamp(lane, 0.5, ROAD_COLOUR_LANES - 0.5);
 		vec3 road_colour = linear_light(
 			textureLod(roads_lines, vec2(u, colour_row / size.y), 0.0).rgb);
+		paved = on_a_road;
 		photo_colour = mix(photo_colour, road_colour, on_a_road);
 		soft_photo_colour = mix(soft_photo_colour, road_colour, on_a_road);
 		for (int index = 0; index < LAYER_COUNT; index++) {
@@ -310,6 +314,7 @@ void fragment() {
 		int layer = int(surface.a + 0.5);
 		float patches = value_noise(world_xz * 0.07) * 0.6 + value_noise(world_xz * 0.31) * 0.4;
 		vec3 lot_colour = surface.rgb * (1.0 + LOT_VARIATION * (patches - 0.5));
+		paved = max(paved, in_lot);
 		photo_colour = mix(photo_colour, lot_colour, in_lot);
 		soft_photo_colour = mix(soft_photo_colour, lot_colour, in_lot);
 		for (int index = 0; index < LAYER_COUNT; index++) {
@@ -367,6 +372,7 @@ void fragment() {
 		rubbered = kerbs.a;
 		// Between its edges the road is its asphalt, whatever the photo's pixels say there.
 		on_road = 1.0 - smoothstep(edge_m - soft_m, edge_m + soft_m, from_centre_m);
+		paved = max(paved, on_road);
 		for (int layer = 0; layer < LAYER_COUNT; layer++) {
 			weights[layer] = mix(weights[layer], layer == road_layer ? 1.0 : 0.0, on_road);
 		}
@@ -404,6 +410,8 @@ void fragment() {
 	float roughness = ground.roughness;
 	// Paint is worn: it lets the ground show through in patches, and is no smoother than it.
 	float wear = 0.75 + 0.25 * value_noise(world_xz * 9.0) * value_noise(world_xz * 1.7);
+	float painted = marking * (1.0 - on_road);
+	float kerbed = 0.0;
 	marking *= (1.0 - on_road) * (0.72 + 0.28 * smoothstep(0.2, 0.6, value_noise(world_xz * 3.1)));
 	albedo *= 1.0 - 0.5 * joints * (1.0 - on_road) * (1.0 - smoothstep(40.0, 120.0, distance_m));
 	albedo = mix(albedo, LINE_WHITE * wear, marking * 0.92);
@@ -434,6 +442,8 @@ void fragment() {
 		float grime = 0.7 + 0.3 * value_noise(world_xz * 5.0) - 0.25 * value_noise(world_xz * 0.9);
 		albedo = mix(albedo, kerb_colour * grime, kerb);
 		paint = max(paint, max(line * step(0.5, line_painted), kerb));
+		painted = max(painted, line * step(0.5, line_painted));
+		kerbed = kerb;
 	}
 
 	ALBEDO = albedo;
@@ -441,4 +451,9 @@ void fragment() {
 	SPECULAR = 0.35;
 	vec3 tangent_normal = normalize(mix(ground.normal, vec3(0.0, 0.0, 1.0), 0.4 * paint));
 	NORMAL = ground_view_normal(NORMAL, tangent_normal, VIEW_MATRIX, INV_VIEW_MATRIX);
+	// What covers most of the pixel names it: a kerb, paint, a road or a lot, else terrain.
+	float ground_class = paved > 0.5 ? CLASS_ROAD : CLASS_TERRAIN;
+	ground_class = painted > 0.5 ? CLASS_LANE_MARKING : ground_class;
+	ground_class = kerbed > 0.5 ? CLASS_KERB : ground_class;
+	LABEL_AS(ground_class)
 }

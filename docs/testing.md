@@ -29,6 +29,13 @@ Headless Godot does not render, but it does compile shaders: `test_shaders.gd` l
 that need images pass a capture function returning generated images. What only a display shows (the views, the rendered pair) is checked by running
 `./simulate.sh` with `--stereo-record`.
 
+What must be rendered to be checked is in `simulator/tests/rendered/test_*.gd`, run in a
+window, with a display and a GPU:
+
+```sh
+./simulator/tests/run_rendered_tests.sh   # the ground truth of a generated scene
+```
+
 The pack builders in `tools/` are tested with Python's `unittest` (they need numpy and Pillow):
 
 ```sh

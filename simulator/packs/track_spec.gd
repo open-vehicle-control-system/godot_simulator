@@ -20,6 +20,7 @@ var trees: TreesSpec = null  ## null when the pack has no `trees`
 var signs: SignsSpec = null  ## null when the pack has no `signs`
 var spawn_position: Vector3
 var spawn_yaw_rad: float  ## about +Y, from +Z (Godot forward) towards +X; ROS yaw about z
+var labelled := false  ## true when its world is drawn with segmentation labels: not a pack field
 
 
 static func parse(manifest: Dictionary, directory: String) -> Dictionary:

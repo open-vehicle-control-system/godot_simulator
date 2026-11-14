@@ -4,6 +4,8 @@
 shader_type spatial;
 render_mode cull_disabled, depth_draw_opaque;
 
+#include "res://sensors/shaders/label.gdshaderinc"
+
 uniform sampler2D atlas : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform float fades_from_m = 1e9;
 uniform float gone_at_m = 2e9;
@@ -28,4 +30,9 @@ void fragment() {
 	// Cards lit as a crown is: from above, and with the light that passes through the leaves.
 	NORMAL = normalize(mix(NORMAL, (VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz, 0.55));
 	BACKLIGHT = vec3(0.25, 0.3, 0.2);
+	LABEL_AS(CLASS_VEGETATION)
+	// A label is whole or absent: a soft edge would blend two classes into a third.
+	if ((CAMERA_VISIBLE_LAYERS & LABEL_LAYER) == 0u) {
+		ALPHA = step(0.45, colour.a);
+	}
 }

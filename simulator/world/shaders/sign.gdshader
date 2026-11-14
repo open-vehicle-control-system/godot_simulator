@@ -2,6 +2,8 @@
 shader_type spatial;
 render_mode cull_disabled;
 
+#include "res://sensors/shaders/label.gdshaderinc"
+
 uniform sampler2D face : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform vec3 back_colour : source_color = vec3(0.42, 0.43, 0.44);
 
@@ -15,4 +17,5 @@ void fragment() {
 	ALBEDO = mix(back_colour, shown, front);
 	ROUGHNESS = mix(BACK_ROUGHNESS, FACE_ROUGHNESS, front);
 	METALLIC = mix(BACK_METALLIC, 0.0, front);
+	LABEL_AS(CLASS_SIGN)
 }

@@ -47,7 +47,10 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `link/link_protocol.gd` | The link's packets and the Godot ↔ ROS frames. Pure |
 | `link/simulator_link.gd` | The link's TCP client |
 | `sensors/stereo_camera.gd` | The stereo pair's cameras and intrinsics |
-| `sensors/stereo_sender.gd`, `sensors/stereo_recorder.gd` | Pairs to the link, pairs to disk |
+| `sensors/stereo_sender.gd`, `sensors/stereo_recorder.gd` | Pairs to the link, frames to disk |
+| `sensors/stereo_frame.gd`, `sensors/numpy_file.gd` | What the camera shows of one frame; a float map as a `.npy` file |
+| `sensors/segmentation.gd`, `sensors/shaders/label.gdshader`, `label.gdshaderinc` | The segmentation classes, and how a surface shows its class to the ground truth camera |
+| `sensors/ground_truth_camera.gd`, `sensors/ground_truth_effect.gd`, `sensors/shaders/ground_truth.comp` | The left camera's view as depth, disparity and segmentation ([Stereo camera](./stereo.md#ground-truth)) |
 | `view/viewer.gd`, `view/view_poses.gd` | The views, the HUD and the keys |
 
 Logic that only computes is in scripts of static functions, tested without a scene; nodes hold
@@ -169,6 +172,17 @@ maps the pack's.
 - In a shader, whatever reads screen-space gradients (`dFdx`, `fwidth`, a texture read without
   explicit gradients) is computed before any branch: inside one the gradients are undefined
   along the branch's border and leave a dotted line there.
+
+## Ground truth
+
+`--ground-truth` adds a camera at the left stereo camera's place whose cull mask lacks one
+render layer, which no object is on. Shaders read the camera's layers: for that camera alone
+the world's own shaders emit their class instead of their colour, and the materials that are
+not the world's (a rule's `roof`, `facade`, `seats` and `plain`, the sign posts, the vehicle)
+carry a label pass, a second material drawn over them whose triangles are empty for every
+other camera. A compositor effect then reads that camera's depth buffer and labels. The label
+passes are only added with `--ground-truth`, except on the sign posts and signal heads, a few
+draws a tile.
 
 ## Packs
 

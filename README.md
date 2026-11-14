@@ -28,6 +28,7 @@ track pack and a vehicle pack.
 | `--hold=KM_H,STEERING_DEG` | hold this speed and front wheel angle (positive left) instead, without OVCS: for a screenshot of a moving vehicle |
 | `--camera=VIEW` | `chase`, `cockpit`, `bonnet`, `side` or `front` |
 | `--stereo-record=DIR` | record stereo pairs, poses and calibration ([Stereo camera](./docs/stereo.md)) |
+| `--ground-truth` | with `--stereo-record`, record each pair's depth, disparity and segmentation too ([Stereo camera](./docs/stereo.md#ground-truth)) |
 | `--show-stereo` | show the stereo pair at start |
 | `--spawn=X,Y,Z,YAW_DEG` | start there instead of at the track's spawn, in the track's frame as `spawn` in its `pack.json` |
 | `--eye=X,Y,Z` | look at the vehicle from this fixed point of the track's frame |

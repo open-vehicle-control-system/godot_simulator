@@ -1,55 +1,69 @@
 class_name StereoRecorder
 extends Node
-## Records stereo pairs for offline vision work: left/NNNNNN.png and right/NNNNNN.png, a row of
-## poses.csv per pair, and calib.json. Poses are the vehicle's base_link in the world, in ROS
-## frames as the link reports them; calib.json gives the intrinsics, the baseline and where the
-## pair sits on base_link.
+## Records stereo frames for offline vision work: an image or a map per frame in a directory
+## each (left/NNNNNN.png, right/NNNNNN.png and, with ground truth, segmentation/NNNNNN.png,
+## depth/NNNNNN.npy, disparity/NNNNNN.npy), a row of poses.csv per frame, and calib.json.
+## Poses are the vehicle's base_link in the world, in ROS frames as the link reports them.
 
-const MOUNT_PRECISION_M := 1e-6  # Vector3 is single precision
 const POSES_HEADER := "frame,time_s,x_m,y_m,z_m,qx,qy,qz,qw,speed_m_s,steering_rad"
+## Files being written at once: a frame handed over while as many are is not recorded, so
+## a disk or encoder slower than the camera never holds the simulation back.
+const MAX_FILES_BEING_WRITTEN := 32
+
+## Low priority tasks share a few of the pool's threads: too few to encode at the camera's rate.
+const HIGH_PRIORITY := true
 
 var _directory: String
 var _vehicle: Vehicle
-var _capture: Callable
+var _request_frame: Callable
 var _period_s: float
 var _time_s := 0.0
 var _next_capture_s := 0.0
+var _capture_due := false
 var _frame := 0
 var _poses: FileAccess
 var _writing_tasks: Array[int] = []
-var _drawn := {}  # the time and vehicle state of the frame last drawn
+var _directories_made := {}
+var _frames_skipped := 0
 
 
 func setup(
-	directory: String, vehicle: Vehicle, optics: VehicleSpec.StereoOptics, capture: Callable
+	directory: String,
+	vehicle: Vehicle,
+	rate_hz: float,
+	calibration: Dictionary,
+	request_frame: Callable
 ) -> String:
-	## Records what `capture` returns (`[left, right]` images) at the optics' rate into
-	## `directory`; returns why it cannot, or "".
+	## Records into `directory`, `rate_hz` times a second, the StereoFrame that `request_frame`
+	## hands to the function it is called with, at once or a few frames later, of the frame
+	## about to be drawn; `calibration` becomes calib.json. Returns why it cannot, or "".
 	_directory = directory
 	_vehicle = vehicle
-	_capture = capture
-	_period_s = 1.0 / optics.rate_hz
+	_request_frame = request_frame
+	_period_s = 1.0 / rate_hz
 	name = "StereoRecorder"
-	for side in ["left", "right"]:
-		if DirAccess.make_dir_recursive_absolute(directory.path_join(side)) != OK:
-			return "recorder: cannot write %s" % directory
-	if not _write_calibration(optics):
+	if DirAccess.make_dir_recursive_absolute(directory) != OK:
 		return "recorder: cannot write %s" % directory
+	var calibration_file := FileAccess.open(directory.path_join("calib.json"), FileAccess.WRITE)
+	if calibration_file == null:
+		return "recorder: cannot write %s" % directory
+	calibration_file.store_string(JSON.stringify(calibration, "  "))
 	_poses = FileAccess.open(directory.path_join("poses.csv"), FileAccess.WRITE)
 	_poses.store_line(POSES_HEADER)
-	_remember_drawn()
-	print("recorder: %s at %.0f Hz" % [directory, optics.rate_hz])
+	print("recorder: %s at %.0f Hz" % [directory, rate_hz])
 	return ""
 
 
 func finish() -> void:
-	## Waits for the images being written and closes the poses.
+	## Waits for the frames being written and closes the poses. A frame not handed over yet
+	## is not recorded.
 	for task in _writing_tasks:
 		WorkerThreadPool.wait_for_task_completion(task)
 	_writing_tasks.clear()
 	if _poses != null:
 		_poses.close()
 		_poses = null
+		print("recorder: %d frames recorded, %d skipped" % [_frame, _frames_skipped])
 
 
 func _physics_process(delta: float) -> void:
@@ -61,24 +75,47 @@ func _physics_process(delta: float) -> void:
 	_next_capture_s += _period_s
 	if _next_capture_s <= _time_s:
 		_next_capture_s = _time_s + _period_s
-	_record_pair()
+	_capture_due = true
 
 
-func _record_pair() -> void:
-	var file_name := "%06d.png" % _frame
-	var pair: Array[Image] = _capture.call()
-	var paths := [
-		_directory.path_join("left").path_join(file_name),
-		_directory.path_join("right").path_join(file_name),
-	]
+func _process(_delta: float) -> void:
+	# Physics has stepped and the frame is not drawn yet: it will show this state.
+	if _poses == null or not _capture_due:
+		return
+	_capture_due = false
+	var shown := {
+		"time_s": _time_s,
+		"pose": _vehicle.global_transform,
+		"speed_m_s": _vehicle.speed_m_s,
+		"steering_rad": _vehicle.steering_rad,
+	}
+	_request_frame.call(_record.bind(shown))
+
+
+func _record(frame: StereoFrame, shown: Dictionary) -> void:
+	if _poses == null:
+		return
 	_writing_tasks = _writing_tasks.filter(func(task): return not _completed(task))
-	_writing_tasks.append(WorkerThreadPool.add_task(_write_pair.bind(pair, paths)))
-	var pose: Transform3D = _drawn["pose"]
+	if _writing_tasks.size() >= MAX_FILES_BEING_WRITTEN:
+		_frames_skipped += 1
+		return
+	for image in frame.images:
+		_writing_tasks.append(
+			WorkerThreadPool.add_task(
+				_write_image.bind(frame.images[image], _path(image, "png")), HIGH_PRIORITY
+			)
+		)
+	for map in frame.maps:
+		var file := NumpyFile.float32_image(frame.size_px.x, frame.size_px.y, frame.maps[map])
+		_writing_tasks.append(
+			WorkerThreadPool.add_task(_write_file.bind(file, _path(map, "npy")), HIGH_PRIORITY)
+		)
+	var pose: Transform3D = shown["pose"]
 	var position := LinkProtocol.to_ros(pose.origin)
 	var rotation := pose.basis.orthonormalized().get_rotation_quaternion()
 	var row := [
 		str(_frame),
-		"%.4f" % _drawn["time_s"],
+		"%.4f" % shown["time_s"],
 		"%.4f" % position[0],
 		"%.4f" % position[1],
 		"%.4f" % position[2],
@@ -86,46 +123,30 @@ func _record_pair() -> void:
 		"%.6f" % rotation.x,
 		"%.6f" % rotation.y,
 		"%.6f" % rotation.w,
-		"%.3f" % _drawn["speed_m_s"],
-		"%.4f" % _drawn["steering_rad"],
+		"%.3f" % shown["speed_m_s"],
+		"%.4f" % shown["steering_rad"],
 	]
 	_poses.store_line(",".join(row))
+	_poses.flush()  # a recording is often ended by killing the simulator
 	_frame += 1
 
 
-static func _write_pair(pair: Array[Image], paths: Array) -> void:
-	pair[0].save_png(paths[0])
-	pair[1].save_png(paths[1])
+func _path(kind: String, extension: String) -> String:
+	## Where this frame's file of `kind` goes, its directory made.
+	var directory := _directory.path_join(kind)
+	if not _directories_made.has(kind):
+		DirAccess.make_dir_recursive_absolute(directory)
+		_directories_made[kind] = true
+	return directory.path_join("%06d.%s" % [_frame, extension])
 
 
-func _process(_delta: float) -> void:
-	# Physics steps before drawing: a capture returns the frame drawn in this state.
-	if _poses != null:
-		_remember_drawn()
+static func _write_image(image: Image, path: String) -> void:
+	image.convert(Image.FORMAT_RGB8)
+	image.save_png(path)
 
 
-func _remember_drawn() -> void:
-	_drawn = {
-		"time_s": _time_s,
-		"pose": _vehicle.global_transform,
-		"speed_m_s": _vehicle.speed_m_s,
-		"steering_rad": _vehicle.steering_rad,
-	}
-
-
-func _write_calibration(optics: VehicleSpec.StereoOptics) -> bool:
-	var calibration := StereoCamera.intrinsics(optics)
-	calibration["mount_m"] = LinkProtocol.to_ros(optics.mount).map(
-		func(metres): return snappedf(metres, MOUNT_PRECISION_M)
-	)
-	calibration["pitch_down_deg"] = optics.pitch_deg
-	calibration["camera_frame"] = "OpenCV: x right, y down, z forward; right = left + baseline along x"
-	calibration["mount_frame"] = "ROS base_link: x forward, y left, z up; midway between the cameras"
-	var file := FileAccess.open(_directory.path_join("calib.json"), FileAccess.WRITE)
-	if file == null:
-		return false
-	file.store_string(JSON.stringify(calibration, "  "))
-	return true
+static func _write_file(file: PackedByteArray, path: String) -> void:
+	FileAccess.open(path, FileAccess.WRITE).store_buffer(file)
 
 
 static func _completed(task: int) -> bool:

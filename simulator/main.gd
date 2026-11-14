@@ -30,6 +30,7 @@ func _ready() -> void:
 	var track: TrackSpec = track_found["track"]
 	if options.spawn_given:
 		track.move_spawn(options.spawn_position_m, options.spawn_yaw_deg)
+	track.labelled = options.ground_truth
 	var problem := _build(options, track, vehicle_found["vehicle"])
 	if problem != "":
 		_quit_with(problem)
@@ -88,11 +89,7 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 		add_child(driver)
 		driver.setup(vehicle)
 	if options.stereo_record_directory != "":
-		var recorder := StereoRecorder.new()
-		add_child(recorder)
-		var problem := recorder.setup(
-			options.stereo_record_directory, vehicle, spec.stereo, stereo.capture
-		)
+		var problem := _record(options, vehicle, stereo)
 		if problem != "":
 			return problem
 	var viewer := Viewer.new()
@@ -117,8 +114,29 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 	if spec.mirrors != null:
 		viewer.mirrors = Mirrors.new()
 		add_child(viewer.mirrors)
-		return viewer.mirrors.setup(spec, model.body, lighting["environment"])
+		var problem := viewer.mirrors.setup(spec, model.body, lighting["environment"])
+		if problem != "":
+			return problem
+	if options.ground_truth:
+		Segmentation.label_under(vehicle, Segmentation.VEHICLE)
 	return ""
+
+
+func _record(options: SimulatorOptions, vehicle: Vehicle, stereo: StereoCamera) -> String:
+	## Records the stereo pair as the options tell; returns why it cannot, or "".
+	if options.ground_truth:
+		var problem := stereo.add_ground_truth(vehicle)
+		if problem != "":
+			return problem
+	var recorder := StereoRecorder.new()
+	add_child(recorder)
+	return recorder.setup(
+		options.stereo_record_directory,
+		vehicle,
+		stereo.optics.rate_hz,
+		stereo.described(),
+		stereo.request_next_frame
+	)
 
 
 static func _read_model_into(read: Dictionary, spec: VehicleSpec) -> void:

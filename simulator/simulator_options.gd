@@ -13,6 +13,8 @@ extends RefCounted
 ##                           without OVCS: what a screenshot of a moving vehicle needs
 ##   --camera=VIEW           chase, cockpit, bonnet, side or front (chase by default)
 ##   --stereo-record=DIR     record stereo pairs, poses and calibration into DIR
+##   --ground-truth          with --stereo-record, record each pair's depth, disparity and
+##                           segmentation too
 ##   --show-stereo           show the stereo pair at start (V toggles it)
 ##   --spawn=X,Y,Z,YAW_DEG   start there instead of at the track's spawn: metres and degrees in
 ##                           the track's frame, as `spawn` in its pack.json
@@ -30,6 +32,7 @@ var link_host := ""
 var link_port := DEFAULT_LINK_PORT
 var view := "chase"
 var stereo_record_directory := ""
+var ground_truth := false
 var show_stereo := false
 var keyboard := false
 var hold_given := false
@@ -64,6 +67,8 @@ static func parse(arguments: PackedStringArray) -> Dictionary:
 		return {"error": "--keyboard and --link both drive the vehicle: choose one"}
 	if options.hold_given and (options.keyboard or options.link_host != ""):
 		return {"error": "--hold drives the vehicle: not with --keyboard or --link"}
+	if options.ground_truth and options.stereo_record_directory == "":
+		return {"error": "--ground-truth is recorded: it needs --stereo-record"}
 	return {"options": options}
 
 
@@ -102,6 +107,8 @@ func _read_switch(option: String) -> String:
 			keyboard = true
 		"--timing":
 			timing = true
+		"--ground-truth":
+			ground_truth = true
 		_:
 			return "unknown option %s" % option
 	return ""

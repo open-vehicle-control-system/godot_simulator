@@ -6,6 +6,8 @@
 shader_type spatial;
 render_mode cull_disabled;
 
+#include "res://sensors/shaders/label.gdshaderinc"
+
 const float CROWN_M = 5.0;
 const float GAP_SHADE = 0.18;
 const float ROUNDNESS = 1.6;
@@ -68,4 +70,5 @@ void fragment() {
 	vec3 round_crown = normalize(vec3(-to_crown.x * ROUNDNESS, 1.0, -to_crown.y * ROUNDNESS));
 	NORMAL = normalize(mix(NORMAL, (VIEW_MATRIX * vec4(round_crown, 0.0)).xyz, 0.75));
 	BACKLIGHT = vec3(0.25, 0.3, 0.2);
+	LABEL_AS(CLASS_VEGETATION)
 }

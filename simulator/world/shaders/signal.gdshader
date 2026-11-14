@@ -3,6 +3,8 @@
 // INSTANCE_CUSTOM.r the head's place in the cycle, 0 to 1.
 shader_type spatial;
 
+#include "res://sensors/shaders/label.gdshaderinc"
+
 uniform float green_s = 18.0;
 uniform float amber_s = 3.0;
 uniform float red_s = 23.0;
@@ -24,4 +26,5 @@ void fragment() {
 	ALBEDO = COLOR.rgb * mix(UNLIT, 1.0, lit);
 	EMISSION = COLOR.rgb * LIT_ENERGY * lit;
 	ROUGHNESS = 0.25;
+	LABEL_AS(CLASS_SIGN)
 }

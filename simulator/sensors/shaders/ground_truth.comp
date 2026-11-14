@@ -1,0 +1,45 @@
+#version 450
+// The ground truth of a frame, from what the ground truth camera drew: the depth along the optical axis in metres, the disparity in pixels, and the
+// colour of each pixel's class. A pixel no surface covers is sky: depth and disparity 0.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D depth_buffer;
+layout(set = 0, binding = 1) uniform sampler2D labels;
+layout(r32f, set = 0, binding = 2) uniform restrict writeonly image2D depth_m;
+layout(r32f, set = 0, binding = 3) uniform restrict writeonly image2D disparity_px;
+layout(rgba8, set = 0, binding = 4) uniform restrict writeonly image2D segmentation;
+layout(set = 0, binding = 5, std140) uniform Classes {
+	vec4 colours[16];
+} classes;
+
+layout(push_constant, std430) uniform Camera {
+	mat4 inverse_projection;
+	float focal_px_times_baseline_m;
+	float classes_per_mark;
+	float faintest_mark;
+	float unlabelled_class;
+	float sky_class;
+} camera;
+
+void main() {
+	ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 size = imageSize(depth_m);
+	if (pixel.x >= size.x || pixel.y >= size.y) {
+		return;
+	}
+	// Reverse depth: 0 is the far plane, where nothing was drawn.
+	float depth = texelFetch(depth_buffer, pixel, 0).r;
+	vec2 clip = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+	vec4 seen = camera.inverse_projection * vec4(clip, depth, 1.0);
+	float metres = depth > 0.0 ? -seen.z / seen.w : 0.0;
+	imageStore(depth_m, pixel, vec4(metres));
+	imageStore(disparity_px, pixel,
+		vec4(depth > 0.0 ? camera.focal_px_times_baseline_m / metres : 0.0));
+	// Something transparent over a label dims its class and its mark alike.
+	vec2 label = texelFetch(labels, pixel, 0).rg;
+	float shown_class = label.g > camera.faintest_mark
+		? round(label.r / label.g * camera.classes_per_mark) : camera.unlabelled_class;
+	shown_class = depth > 0.0 ? shown_class : camera.sky_class;
+	imageStore(segmentation, pixel, vec4(classes.colours[int(shown_class)].rgb, 1.0));
+}

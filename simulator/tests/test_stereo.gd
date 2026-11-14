@@ -16,6 +16,39 @@ func test_intrinsics_follow_from_resolution_and_horizontal_field_of_view() -> vo
 	assert_eq(intrinsics["baseline_m"], 0.12)
 
 
+func test_disparity_follows_from_depth_focal_length_and_baseline() -> void:
+	var optics := _optics(320, 180, 90.0, 0.12)
+	var cases := {1.0: 19.2, 9.6: 2.0, 192.0: 0.1}
+
+	for depth_m in cases:
+		assert_almost_eq(StereoCamera.disparity_px(optics, depth_m), cases[depth_m], 1e-5)
+
+
+func test_calibration_gives_the_intrinsics_and_where_the_pair_sits() -> void:
+	var optics := _optics(320, 180, 90.0, 0.12)
+	optics.mount = Vector3(0.0, 1.16, 0.6)
+	optics.pitch_deg = 2.0
+
+	var calibration := StereoCamera.calibration(optics)
+
+	assert_almost_eq(calibration["fx"], 160.0, 1e-4)
+	assert_eq(calibration["baseline_m"], 0.12)
+	assert_eq(calibration["mount_m"], [0.6, 0.0, 1.16])
+	assert_eq(calibration["pitch_down_deg"], 2.0)
+	assert_true(not calibration.has("ground_truth"))
+
+
+func test_calibration_with_ground_truth_describes_its_maps_and_classes() -> void:
+	var calibration := StereoCamera.calibration_with_ground_truth(_optics(320, 180, 90.0, 0.12))
+
+	var ground_truth: Dictionary = calibration["ground_truth"]
+	assert_eq(
+		ground_truth["segmentation_classes"][2], {"id": 2, "name": "road", "colour": [128, 64, 128]}
+	)
+	assert_true(ground_truth.has("depth"))
+	assert_true(ground_truth.has("disparity"))
+
+
 func test_cameras_are_parallel_a_baseline_apart_looking_forward() -> void:
 	var optics := _optics(320, 180, 90.0, 0.2)
 	optics.mount = Vector3(0.0, 1.2, 0.6)

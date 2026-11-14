@@ -36,8 +36,8 @@ simulator's start; both images of a pair carry the same one.
 - A packet it cannot read is dropped with a warning.
 - Sending never blocks the simulator. While more than 2 MiB are waiting for OVCS to read them,
   images are dropped and states still sent; beyond 32 MiB the simulator disconnects.
-- Images and recorded poses carry the time and state of the frame they show, one physics step
-  before the capture: Godot steps physics before drawing.
+- Images carry the time and state of the frame they show, one physics step before the
+  capture: Godot steps physics before drawing.
 - A pair is read back from the GPU a few frames after it is asked for, so asking never makes
   a frame wait for the GPU; it still carries the time of the frame it shows.
 - The simulator never waits on vsync and runs at 60 frames per second: OVCS measures wheel

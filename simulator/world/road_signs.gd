@@ -123,6 +123,7 @@ static func post_mesh() -> ArrayMesh:
 	steel.albedo_color = POST_COLOUR
 	steel.metallic = POST_METALLIC
 	steel.roughness = POST_ROUGHNESS
+	steel.next_pass = Segmentation.label_pass(Segmentation.SIGN)
 	var standing := ArrayMesh.new()
 	standing.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	standing.surface_set_material(0, steel)
@@ -148,6 +149,7 @@ static func signal_mesh(signs: SignsSpec) -> ArrayMesh:
 	var paint := StandardMaterial3D.new()
 	paint.vertex_color_use_as_albedo = true
 	paint.roughness = 0.6
+	paint.next_pass = Segmentation.label_pass(Segmentation.SIGN)
 	var mesh := body.commit()
 	mesh.surface_set_material(0, paint)
 	var lenses := SurfaceTool.new()

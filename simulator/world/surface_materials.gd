@@ -193,6 +193,13 @@ func _material(rule: SurfaceRule, material_name: String) -> Material:
 
 
 func _build(rule: SurfaceRule) -> Material:
+	var material := _surface(rule)
+	if _track.labelled:
+		material.next_pass = Segmentation.label_pass(Segmentation.SURFACE_CLASSES[rule.kind])
+	return material
+
+
+func _surface(rule: SurfaceRule) -> Material:
 	if rule.kind == "plain":
 		return _plain(rule)
 	var material := ShaderMaterial.new()
