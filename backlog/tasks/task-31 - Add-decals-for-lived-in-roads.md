@@ -1,9 +1,10 @@
 ---
 id: TASK-31
 title: Add decals for lived-in roads
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-14 19:59'
+updated_date: '2026-11-14 22:55'
 labels: []
 dependencies:
   - TASK-23

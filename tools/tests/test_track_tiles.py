@@ -223,7 +223,10 @@ class WriteTest(unittest.TestCase):
         (cls.directory / "tiles" / "1016_1984.track.png").write_bytes(b"")
         (cls.directory / "tiles" / "1048_1984.track.png").write_bytes(b"")
         trees = {"conifer": [[4.0, 20.0, 2.0, 12.0], [4.0, 90.0, 0.0, 9.0]]}
-        signs = {"posts": [{"position_m": [8.0, 3.0, 0.3], "height_m": 2.0, "diameter_m": 0.08}]}
+        signs = {
+            "posts": [{"position_m": [8.0, 3.0, 0.3], "height_m": 2.0, "diameter_m": 0.08}],
+            "decals": [{"kind": "patch", "position_m": [8.0, 20.0, 0.6], "yaw_deg": 0.0}],
+        }
         cls.homeless = track_tiles.write(
             cls.directory / "world.glb",
             cls.directory,
@@ -308,7 +311,7 @@ class WriteTest(unittest.TestCase):
         self.assertAlmostEqual(first[14, 20], 0.5 + 0.1 * 7.0, places=5)
         self.assertAlmostEqual(first[2, 20], 1.0, places=5)
 
-    def test_trees_and_signs_are_listed_by_the_tile_they_stand_on(self):
+    def test_trees_signs_and_decals_are_listed_by_the_tile_they_stand_on(self):
         first = json.loads((self.directory / "tiles" / "1000_1984.json").read_text())
         second = json.loads((self.directory / "tiles" / "1016_1984.json").read_text())
 
@@ -316,6 +319,8 @@ class WriteTest(unittest.TestCase):
         self.assertEqual(second["trees"]["conifer"], [[4.0, 20.0, 2.0, 12.0]])
         self.assertEqual(len(first["posts"]), 1)
         self.assertEqual(second["posts"] + second["plates"] + second["signals"], [])
+        self.assertEqual(first["decals"], [])
+        self.assertEqual(second["decals"][0]["kind"], "patch")
         self.assertEqual(self.homeless, 1)
 
     def test_every_tile_has_its_photo(self):

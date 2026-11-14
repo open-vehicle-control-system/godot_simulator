@@ -9,7 +9,8 @@ LiDAR ground model (smooth_terrain.py); its surface maps and road lines are deri
 orthophoto (track_surfaces.py), as are the roads and parking lots OpenStreetMap maps around
 it (secondary_roads.py, parking_lots.py); its buildings are built closed from their mapped
 footprints and the LiDAR surface model (buildings.py); its road signs stand where the map and
-the highway code put them (road_signs.py), and no tree stands on a road (drivable.py); the
+the highway code put them (road_signs.py), its decals lie where the lap, the photo and the map
+are evidence for them (road_decals.py), and no tree stands on a road (drivable.py); the
 whole is cut into the pack's tiles (track_tiles.py), the world it is cut from kept in
 OUT_DIR/../work. Its
 CC0 texture sets are downloaded once into OUT_DIR/../textures (fetch_textures.py) and
@@ -37,6 +38,7 @@ import ground_classes
 import numpy as np
 import osm
 import parking_lots
+import road_decals
 import road_markings
 import road_signs
 import roofs
@@ -100,6 +102,8 @@ BUILDING_CLEAR_M = 0.5
 TERRAIN_EDGE_M = 2.0
 LAP_STEP = 5  # every how many of the lap's sections that distance is measured from
 ROAD_LINE_WIDTH_M = 0.15
+# The middle of the lap's edge lines, inside its asphalt's edges.
+LAP_LINE_FROM_EDGE_M = track_surfaces.LINE_INSET_M + track_surfaces.LINE_WIDTH_M / 2.0
 # Facade kind: texture set, the width it covers, window style and the tint of each
 # M_Facade_<kind>_<index> material.
 FACADES = {
@@ -404,7 +408,9 @@ def write_surfaces(experiment, track_id, circuit, directory, work, manifest, cro
     surveyed = track_surfaces.Ground(data / "ortho", origin, sections, trees)
     ground = manifest["track"]["ground"]
     ground["photo_grade"] = surveyed.grade
-    lap_length_m, lap_map, lap_edges = track_surfaces.build(surveyed, sections, directory)
+    lap_length_m, lap_map, lap_edges, racing_offset_m = track_surfaces.build(
+        surveyed, sections, directory
+    )
     ground["road"] = {
         "lines": "road_lines.png",
         "lap_length_m": lap_length_m,
@@ -466,6 +472,20 @@ def write_surfaces(experiment, track_id, circuit, directory, work, manifest, cro
     print(f"{track_id} signs: {signs.counts()}")
     for reason, sign in signs.unplaced:
         print(f"{track_id} sign not placed, {reason}: {sign}")
+    decals = road_decals.place(
+        surveyed,
+        sections,
+        lap_edges,
+        racing_offset_m,
+        extract.nodes,
+        carriageways(sections, lap_edges, roads),
+        road_decals.shadowed_by(
+            [(x, -z, height) for x, _, z, height, _ in standing],
+            [area.points for area in extract.areas if "building" in area.tags],
+        ),
+    )
+    placed["decals"] = write_decals(decals, height_m, directory, manifest)
+    print(f"{track_id} decals: {dict(Counter(decal.kind for decal in decals))}")
 
     write_buildings(experiment, frame, extract, surveyed, height_m, data, work / "world.glb")
     photo = world_photo(data / "godot" / "world.glb", mosaic)
@@ -487,7 +507,7 @@ def write_surfaces(experiment, track_id, circuit, directory, work, manifest, cro
         for fault in buildings.audit(tile).values()
     ]
     print(f"{track_id}: {faults.count(None)} of {len(faults)} buildings in the tiles are closed")
-    print(f"{track_id}: {tile_count} tiles; {homeless} trees and sign parts stood on none")
+    print(f"{track_id}: {tile_count} tiles; {homeless} trees, sign parts and decals stood on none")
     wooded = track_tiles.write_canopy(
         directory, mosaic, photo, origin, tree_instances(kept), crowns
     )
@@ -584,6 +604,29 @@ def write_signs(signs, height_m, directory, manifest):
     if signs.faces():
         manifest["attribution"].append(sign_faces.SOURCE)
     return road_signs.described(signs, height_m)
+
+
+def carriageways(sections, lap_edges, roads):
+    """Return the lap and the surveyed roads as road_decals.Carriageway: asphalt and paint."""
+    left_m, right_m = (np.asarray(edge) for edge in lap_edges)
+    lap_lines = [LAP_LINE_FROM_EDGE_M - left_m, right_m - LAP_LINE_FROM_EDGE_M]
+    found = [road_decals.Carriageway(sections, left_m, right_m, lap_lines)]
+    for road in roads:
+        offsets = [np.where(line.pattern > 0, line.offset_m, np.nan) for line in road.lines]
+        found.append(
+            road_decals.Carriageway(road.sections, road.half_width_m, road.half_width_m, offsets)
+        )
+    return found
+
+
+def write_decals(decals, height_m, directory, manifest):
+    """Write the textures of the decals placed, name them in `manifest`; return them listed."""
+    kinds = [kind for kind in road_decals.KINDS if any(decal.kind == kind for decal in decals)]
+    road_decals.write_textures(directory / "decals", kinds)
+    if kinds:
+        manifest["track"]["decals"] = road_decals.manifest(kinds, "decals")
+        manifest["attribution"].append(road_decals.SOURCE)
+    return road_decals.described(decals, height_m)
 
 
 def instruments(profile):

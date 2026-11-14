@@ -141,7 +141,8 @@ for a vehicle; x, y, z up for a world.
   "ground": {...},
   "surfaces": [...],
   "trees": {...},
-  "signs": {...}
+  "signs": {...},
+  "decals": {...}
 }
 ```
 
@@ -164,8 +165,8 @@ for a vehicle; x, y, z up for a world.
   is under a roof, a stand or the vehicle; 0 does without, and saves the window 0.3 ms a
   frame. It changes the window only, never the stereo cameras' images.
 - `spawn` is where the vehicle starts, yaw counter-clockwise from x seen from above.
-- `ground`, `surfaces`, `trees` and `signs` are optional: see [Surfaces](#surfaces),
-  [Trees](#trees) and [Signs and signals](#signs-and-signals).
+- `ground`, `surfaces`, `trees`, `signs` and `decals` are optional: see [Surfaces](#surfaces),
+  [Trees](#trees), [Signs and signals](#signs-and-signals) and [Decals](#decals).
   A material no surface covers is drawn as its glTF PBR definition.
 
 ### Tiles
@@ -199,7 +200,7 @@ for a vehicle; x, y, z up for a world.
 | `<key>.photo.jpg` | the orthophoto of the tile, for the `terrain` surface; the simulator builds its mipmaps as it reads it |
 | `<key>.surface.png` | the surface map of the tile, for the `terrain` surface |
 | `<key>.track.png`, `<key>.roads.png`, `<key>.lots.png` | the tile's track map, roads map and lots map, when `maps` lists them |
-| `<key>.json` | what stands on the tile, for a track with `trees` or `signs`: `trees`, `posts`, `plates` and `signals` |
+| `<key>.json` | what stands on the tile, for a track with `trees`, `signs` or `decals`: `trees`, `posts`, `plates`, `signals` and `decals` |
 
 - A mesh belongs to one tile. The ground (what the `terrain` surface draws) is cut on the
   tiles' edges, neighbours sharing the corners along them, so it has no seam; any other mesh is
@@ -213,7 +214,8 @@ for a vehicle; x, y, z up for a world.
   within 120 m of the vehicle collide.
 - `<key>.json`: `trees` holds a list per kind, `conifer` and `broadleaf`, of trees as
   `[x, y, z, height_m]`; `posts`, `plates` and `signals` are lists as
-  [Signs and signals](#signs-and-signals) describes. Positions are in the world's ROS frame.
+  [Signs and signals](#signs-and-signals) describes, `decals` as [Decals](#decals) does.
+  Positions are in the world's ROS frame.
 
 ### Surfaces
 
@@ -422,3 +424,33 @@ long every 75 cm, pointing at the traffic that gives way), as worn white paint.
 - `source` is `tagged` for what the map tags there and `derived` for what the builder
   derived from the data ([Track creation](./track_creation.md)); the simulator does not read
   it.
+
+### Decals
+
+```json
+"decals": {
+  "kinds": [{"id": "tyre_marks", "textures": "decals/tyre_marks"}],
+  "draw_distance_m": 120.0
+}
+```
+
+- A kind's `textures` names three PNGs by their path without suffix: `_albedo.png` (sRGB
+  colour, its alpha how much of the ground it covers, 0 on every border), `_normal.png`
+  (OpenGL convention) and `_orm.png` (occlusion, roughness, metallic). Columns run across the
+  decal, rows along its length.
+- A decal is drawn up to `draw_distance_m` from the camera, fading out over the last quarter.
+- The tiles list where decals lie ([Tiles](#tiles)), in `decals`, positions in the world's
+  ROS frame:
+
+```json
+{
+  "decals": [{"kind": "tyre_marks", "position_m": [412.3, -88.1, 102.4], "yaw_deg": 35.2,
+              "size_m": [11.5, 2.0], "opacity": 0.62}]
+}
+```
+
+- `kind` is the `id` of one of `kinds`; `size_m` is the decal's length along `yaw_deg`
+  (counter-clockwise from x seen from above) and its width; `opacity` (0 to 1) scales its
+  alpha. A decal is projected straight down onto the ground (what the `terrain` surface
+  draws), from a metre above `position_m` to a metre below, and onto nothing else: not the
+  vehicle, a wall or a tree.

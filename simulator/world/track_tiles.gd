@@ -53,11 +53,14 @@ static func create(track: TrackSpec) -> Dictionary:
 	var signs: RoadSigns = null
 	if track.signs != null:
 		signs = RoadSigns.new(track.signs)
+	var decals: RoadDecals = null
+	if track.decals != null:
+		decals = RoadDecals.new(track.decals)
 	var world := TrackTiles.new()
 	world.name = "Track"
 	world.process_physics_priority = -1  # before the vehicle moves
 	world._tiles = track.tiles
-	world._loader = TileLoader.new(track, materials, forest, signs)
+	world._loader = TileLoader.new(track, materials, forest, signs, decals)
 	if track.far_scene_path != "":
 		var far_found := FarTerrain.build(track)
 		if far_found.has("error"):

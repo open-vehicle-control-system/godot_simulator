@@ -682,15 +682,21 @@ def survey_road(mosaic, labels, albedo_at, brightness_at, origin, sections):
         edges.append(edge)
         gaps.append(gap)
         kerbs.append(kerb_segments(kerb_widths(kerb_paint, edge), s, lap_length_m))
+    offset, rubber = racing_line(lap_curvature(sections), spacing_m, edges[0], edges[1])
+    return edges, gaps, kerbs, offset, rubber
+
+
+def lap_curvature(sections):
+    """Return the curvature of a closed lap per section, per metre, positive turning right."""
+    tx, ty = np.asarray(sections["tx"]), np.asarray(sections["ty"])
+    spacing_m = float(np.median(np.diff(sections["s"])))
     heading = np.unwrap(np.arctan2(ty, tx))
     turn = np.diff(
         np.concatenate(
             [heading, [heading[0] + round((heading[-1] - heading[0]) / math.tau) * math.tau]]
         )
     )
-    curvature_right = -turn / spacing_m
-    offset, rubber = racing_line(curvature_right, spacing_m, edges[0], edges[1])
-    return edges, gaps, kerbs, offset, rubber
+    return -turn / spacing_m
 
 
 class Ground:
@@ -765,8 +771,9 @@ def labels_tile(labels, mosaic, corner):
 def build(ground, sections, out_directory):
     """Write the surface maps, track maps and road lines of a lap into `out_directory`.
 
-    Marks the lap's asphalt in the ground's labels. Returns the lap's length, its RoadMap
-    and its fitted asphalt edges (left, right) per section.
+    Marks the lap's asphalt in the ground's labels. Returns the lap's length, its RoadMap,
+    its fitted asphalt edges (left, right) per section and its racing line, right of the
+    centreline per section.
     """
     out_directory = Path(out_directory)
     mosaic, origin, labels = ground.mosaic, ground.origin, ground.labels
@@ -788,4 +795,4 @@ def build(ground, sections, out_directory):
     write_tile_maps(
         out_directory, mosaic, "track", lambda corner: lap_map.tile_image(mosaic, corner), "RGBA"
     )
-    return round(lap_length_m, 2), lap_map, edges
+    return round(lap_length_m, 2), lap_map, edges, offset

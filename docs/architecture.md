@@ -42,6 +42,7 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `world/forest.gd`, `world/tree_trunks.gd` | A tile's trees as impostors, batched by cluster, and the silhouettes casting their shadows; their trunks as collision in one physics body |
 | `world/canopy.gd` | The woods as one coarse surface, drawn where the trees are too far to be drawn one by one |
 | `world/road_signs.gd`, `world/post_bodies.gd` | A tile's road signs and signals: a batch per sign face, one of posts, one of signal heads; its posts as collision in one physics body |
+| `packs/decals_spec.gd`, `world/road_decals.gd` | A track's decals, validated; a tile's decals projected onto its ground alone |
 | `world/instance_batch.gd` | Copies of one mesh about a centre, filled on any thread, drawn and culled together |
 | `world/sky_sun.gd` | Finds the sun in a panorama. Pure |
 | `view/screenshot.gd` | Saves the window and reports what the window and the other viewports cost to render |

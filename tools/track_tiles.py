@@ -8,7 +8,7 @@ holding the centre of its bounds. Per tile, as docs/pack_format.md describes the
 - `<key>.glb`: the tile's meshes;
 - `<key>.ground.f32`: the height of the ground, the collision the vehicle rests on;
 - `<key>.photo.jpg`: its orthophoto;
-- `<key>.json`: the trees, posts, plates and signals standing on it.
+- `<key>.json`: the trees, posts, plates and signals standing on it, and the decals lying on it.
 
 `tiles.json` lists the tiles; `far.glb` and `far.jpg` are the whole area, coarse, a mesh per
 tile, drawn where a tile is not loaded. `canopy.glb` is the woods as one coarse surface over
@@ -57,6 +57,7 @@ CANOPY_SHADES = (0.82, 1.08)  # a tree's own brightness, as the simulator draws 
 CANOPY_SEED = 7
 TREE_KINDS = ("conifer", "broadleaf")
 SIGN_KINDS = ("posts", "plates", "signals")
+PLACED_KINDS = SIGN_KINDS + ("decals",)  # what a tile lists with a position_m
 GLTF_TYPES = {1: "SCALAR", 2: "VEC2", 3: "VEC3", 4: "VEC4"}
 GLTF_COMPONENTS = {np.dtype(np.float32): 5126, np.dtype(np.uint32): 5125}
 GLTF_ARRAY_BUFFER = 34962
@@ -372,7 +373,7 @@ def cut_world(world_glb, grid, terrain_prefix, road_prefix):
 def place(tiles, grid, kind, listed):
     """Hand each of `listed` to the tile it stands on; return how many stand on none.
 
-    An entry is a tree `[x, y, z, height]` or a sign's part with a `position_m`, in the
+    An entry is a tree `[x, y, z, height]`, or a sign's part or a decal with a `position_m`, in the
     pack's ROS frame (x = Godot z, y = Godot x).
     """
     homeless = 0
@@ -445,7 +446,7 @@ def write_tile(tile, grid, directory, names):
     filled_m.astype("<f4").tofile(directory / f"{key}.ground.f32")
     standing = {
         "trees": {kind: tile.standing.get(kind, []) for kind in TREE_KINDS},
-        **{kind: tile.standing.get(kind, []) for kind in SIGN_KINDS},
+        **{kind: tile.standing.get(kind, []) for kind in PLACED_KINDS},
     }
     (directory / f"{key}.json").write_text(json.dumps(standing))
     entry = {
@@ -738,14 +739,15 @@ def write_canopy(directory, mosaic, photo_rgb, origin_m, trees, colours):
 
 
 # ------------------------------------------------------------------------------------ whole
-def write(world_glb, directory, mosaic, photo_rgb, origin_m, tile_m, prefixes, trees, signs):
+def write(world_glb, directory, mosaic, photo_rgb, origin_m, tile_m, prefixes, trees, placed):
     """Write a pack's tiles, tiles.json and far terrain into `directory` from its whole world.
 
     `photo_rgb` is the photo the ground is drawn with, covering the ground `mosaic` does;
     `origin_m` is the map's (east, north) at the world's origin, `prefixes` the mesh name
-    prefixes of the terrain and of the road, `trees` the pack's trees by kind and `signs`
-    its posts, plates and signals, in the pack's ROS frame. The ground maps of the tiles that
-    hold no ground are removed. Returns how many trees and sign parts stand on no tile.
+    prefixes of the terrain and of the road, `trees` the pack's trees by kind and `placed`
+    its posts, plates, signals and decals, in the pack's ROS frame. The ground maps of the
+    tiles that hold no ground are removed. Returns how many trees, sign parts and decals
+    stand on no tile.
     """
     grid = TileGrid(mosaic.west - origin_m[0], -(mosaic.north - origin_m[1]), tile_m, origin_m)
     tiles = {
@@ -754,7 +756,7 @@ def write(world_glb, directory, mosaic, photo_rgb, origin_m, tile_m, prefixes, t
         if tile.has_ground()
     }
     homeless = sum(place(tiles, grid, kind, trees.get(kind, [])) for kind in TREE_KINDS)
-    homeless += sum(place(tiles, grid, kind, signs.get(kind, [])) for kind in SIGN_KINDS)
+    homeless += sum(place(tiles, grid, kind, placed.get(kind, [])) for kind in PLACED_KINDS)
     tile_directory = directory / "tiles"
     tile_directory.mkdir(exist_ok=True)
     kept = {grid.key(cell) for cell in tiles}

@@ -334,6 +334,35 @@ from the lap (service roads 250 m); a mapped point snapped to a surveyed road wi
 speed limit sign 5 m into its stretch, none for a stretch under 30 m; a lane's stop line
 starts within 1 m of the centreline and ends within 1.5 m of the edge.
 
+### Decals
+
+A driven road is not clean: rubber, stains and patches show it is used. They are decals the
+builder places where the data is evidence for them, never scattered for effect, and few.
+
+- **Tyre marks where cars brake hard.** A speed profile of the lap (corners taken at the grip a
+  car has, braked into and accelerated out of) gives its braking zones; each zone that sheds
+  enough speed gets one to three marks on the racing line towards its end, a car's two tracks
+  wide. Where the photo shows a dark streak along the lap, narrower than a car and too short
+  to be the racing line's rubber, marks follow it instead.
+- **Stains and patches where the photo shows them.** A small blot darker than the asphalt
+  around it is an oil stain, a wide squarish one patched asphalt. Not a stain: a blot on the
+  racing line (its rubber, which the road already draws), one darker than a stain can be or
+  beside a shadow's dark core (a shadow), beside paint (the dark fringe the photo leaves around
+  it), coloured (a car), or where a tree or a building can cast its shadow.
+- **Covers where the map tags them.** A manhole or a drain only from a tagged node
+  (`man_made=manhole`, `manhole=*`) on a road; at 25 cm per pixel the photo cannot show one.
+- **On the asphalt, clear of the paint.** A decal keeps 25 cm from the edge lines and lies on
+  the ground only: it is projected onto what the terrain surface draws and nothing else.
+- **The textures are drawn by the builder** and credited in the pack.
+
+Starting values that worked on Mettet and Spa: 12 m/s2 of grip and braking, 4 m/s2 of
+acceleration, 75 m/s at most; a zone sheds 16 m/s or more, a mark per 20 m/s, 6 to 14 m long,
+within 35 cm of the racing line, over the last two thirds of the zone. Blots 0.03 darker than
+the median albedo (0.035 for a stain or a patch, at most 0.08), saturation under 0.2, at
+least 0.4 m2; a stain under 2.5 m, a patch 1.5 to 6 m a side; a streak 4 to 30 m long, under
+2.5 m wide, three times longer than wide. 15 m between two decals of one kind; drawn up to
+120 m away.
+
 ### Buildings and roofs
 
 Buildings are best effort, but roofs are seen from above in the photo and from the road at

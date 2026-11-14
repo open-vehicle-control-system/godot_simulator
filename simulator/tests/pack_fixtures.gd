@@ -437,3 +437,21 @@ static func write_signs_files(pack_directory: String, placed: Dictionary) -> voi
 	## The face's image `signs_manifest` names, and `placed` standing on the tile `a`.
 	write_image(pack_directory, "signs/square.png", Color.RED)
 	write_tile_objects(pack_directory, "a", placed)
+
+
+static func decals_manifest(id: String) -> Dictionary:
+	## `ground_manifest` with one kind of decal, `stain`, drawn up to 50 m away.
+	var manifest := ground_manifest(id)
+	manifest["track"]["decals"] = {
+		"kinds": [{"id": "stain", "textures": "decals/stain"}], "draw_distance_m": 50.0
+	}
+	return manifest
+
+
+static func write_decals_files(pack_directory: String, placed: Array) -> void:
+	## What `decals_manifest` names, and the tile `a` with `placed` lying on it.
+	write_ground_files(pack_directory)
+	write_photo_world(pack_directory, "M_Photo_a")
+	for suffix in RoadDecals.TEXTURE_SUFFIXES:
+		write_image(pack_directory, "decals/stain" + suffix, Color(0.1, 0.1, 0.1, 0.5))
+	write_tile_objects(pack_directory, "a", {"decals": placed})
