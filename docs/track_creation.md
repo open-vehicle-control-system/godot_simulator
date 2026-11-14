@@ -355,15 +355,52 @@ texture.
 - **Orient the texture to the roof.** Tile rows run parallel to the eave, at real-world scale,
   the image's top up the slope; a sheet's corrugations run down the slope, as they are laid.
   Texture coordinates are metres along the eave and up the slope.
-- **Prefer clean geometry, where it fits.** A roof rising under 0.6 m is one flat plane. A
-  gable (ridge along the footprint's length) replaces the LiDAR shape when it misses it by
-  less than 0.6 m or 30% of its rise, with triangles cut along the ridge and face normals, so
-  eaves and ridge are crisp; its ridge is never higher than the LiDAR roof, and its ends are
-  walled up with the building's facade. Any other shape (hipped, curved, L-shaped) keeps the
-  LiDAR surface. A dark trim along the outline stands for gutters and flashing.
-- **Facades** use a texture set per kind (brick, plaster, stone, corrugated metal, concrete),
-  drawn windows and dirt at the foot; clean concrete, not rust-stained, for barriers and
-  concrete walls.
+- **Build each building from its footprint alone, closed by construction.** The roof is a
+  set of triangles covering the footprint exactly; a wall hangs from every edge of the roof's
+  outline, and the floor is the roof's triangles turned over. Walls, roof and floor share
+  their edges, so nothing can open between them whatever the roof's shape, and a gable's end
+  is a wall. Never fit a roof and walls apart and patch the gap: moving a roof onto a fitted
+  plane while the walls kept their own tops left 105 of Spa's 158 buildings and 163 of
+  Mettet's 203 open (gable ends, slits under the eaves).
+- **Clean and square the footprint first** (`tools/footprints.py`): points mapped twice and
+  points along a straight wall go, a loop where the outline crosses itself is cut off, the
+  ring runs counter-clockwise, courtyards are kept as holes. Jitter under 0.2 m along a wall
+  goes (Douglas-Peucker), and a wall within 15 degrees of the footprint's main direction, or
+  of its perpendicular, turns about its middle onto it. No wall moves more than 0.4 m from
+  where it is mapped: a footprint that squaring would move further is only straightened, or
+  kept. Two buildings sharing a wall are squared each on its own and may part by that much:
+  keep the tolerance under what shows.
+- **Walls go below the lowest ground under the building** (0.5 m under the lowest terrain
+  point inside the footprint, not only at its corners), up to the roof.
+- **Roof shapes come from the same outline**: flat, a skillion (one plane), a hip (the
+  footprint's straight skeleton, `tools/straight_skeleton.py`), a gable (the hip's ridges run
+  out to the end walls, where two walls run back from an end; else one ridge along or across
+  the footprint) and a pyramid. The skeleton checks its own result (each face a plane rising
+  from its wall, the faces covering the footprint) and refuses a footprint it gets wrong.
+- **The LiDAR chooses the shape**, unless the map names one (`roof:shape`): each shape's
+  eave height and slope are fitted to the surface model inside the footprint (0.7 m from its
+  edge, a point 1.5 m off the fit being a tree or a chimney), and the best fit wins. A shape
+  must beat a flat roof by its prior (5 to 10 cm RMS) and rise 0.6 m; a skillion rises no
+  more than 5 m (more is two roofs, or a roof under trees); a roof under 25 m2 is flat. No
+  wall is lower than 2.2 m. A building the LiDAR does not show (under 1.5 m) is newer than
+  the survey: it takes the map's `height`, or 3 m a level, or one storey, and the map's roof
+  shape or a flat roof.
+- **Check every building is a closed solid**, in the builder and in the tiles
+  (`python3 tools/buildings.py PACK/tiles`): no triangle without an area, every edge in
+  exactly two triangles running opposite ways, the faces wound outwards (a wall wound inwards
+  is culled and looks missing). A faulty shape is dropped and the others fitted again, down
+  to a flat roof, then without its courtyards, then as a box over its bounding rectangle.
+- **A dark trim along the roof's edge** stands for gutters and flashing. It needs the
+  distance to the edge as a plane over each triangle: a roof of a few large triangles has
+  every vertex on its edge, and a distance per vertex would paint it all as trim.
+- **Facades** use a texture set per kind (brick, plaster, stone, corrugated metal, concrete)
+  and dirt at the foot; clean concrete, not rust-stained, for barriers and concrete walls. A
+  building keeps the kind the experiment gave it. Windows are laid out per wall, from its
+  corner and its ground floor (the ground at its higher end, at most 1.5 m above its lower
+  end): bays centred on the wall so no window is cut by a corner, rows a storey apart
+  (3 m, offices 3.6 m) as far as the wall's top allows, which gives a gable its attic
+  window; a door at ground level on two walls in five. A hall has a band of glazing under
+  the eaves, not on a sloping gable top, and a sectional door on long walls.
 
 ### Trees, distance and haze
 

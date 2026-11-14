@@ -7,9 +7,11 @@ in OUT_DIR links to the experiment's large files instead of copying them, so the
 local use only. A circuit's world is the experiment's with its terrain rebuilt smooth from the
 LiDAR ground model (smooth_terrain.py); its surface maps and road lines are derived from its
 orthophoto (track_surfaces.py), as are the roads and parking lots OpenStreetMap maps around
-it (secondary_roads.py, parking_lots.py); its road signs stand where the map and the highway
-code put them (road_signs.py), and no tree stands on a road (drivable.py); the whole is cut
-into the pack's tiles (track_tiles.py), the world it is cut from kept in OUT_DIR/../work. Its
+it (secondary_roads.py, parking_lots.py); its buildings are built closed from their mapped
+footprints and the LiDAR surface model (buildings.py); its road signs stand where the map and
+the highway code put them (road_signs.py), and no tree stands on a road (drivable.py); the
+whole is cut into the pack's tiles (track_tiles.py), the world it is cut from kept in
+OUT_DIR/../work. Its
 CC0 texture sets are downloaded once into OUT_DIR/../textures (fetch_textures.py) and
 compressed there with Godot's encoders (compress_textures.gd, run with the Godot named by
 the GODOT environment variable). The experiment's
@@ -25,8 +27,10 @@ import os
 import struct
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
+import buildings
 import drivable
 import fetch_textures
 import ground_classes
@@ -90,6 +94,8 @@ LAYER_JOINTS_M = {ground_classes.CONCRETE: 5.0}
 ROADS_NEAR_LAP_M = 250.0
 # Public roads are followed further, to the junctions the circuit's access roads lead to.
 PUBLIC_ROADS_NEAR_LAP_M = 450.0
+# The LiDAR surface model lies beside the ground model, named after it.
+SURFACE_MODEL = ("mnt_", "mns_")
 BUILDING_CLEAR_M = 0.5
 TERRAIN_EDGE_M = 2.0
 LAP_STEP = 5  # every how many of the lap's sections that distance is measured from
@@ -461,10 +467,7 @@ def write_surfaces(experiment, track_id, circuit, directory, work, manifest, cro
     for reason, sign in signs.unplaced:
         print(f"{track_id} sign not placed, {reason}: {sign}")
 
-    def photo_albedo(x, z):
-        return surveyed.albedo_at(*surveyed.pixel(x, -z))
-
-    print(f"{track_id} roofs: {roofs.write_roofs(work / 'world.glb', photo_albedo)}")
+    write_buildings(experiment, frame, extract, surveyed, height_m, data, work / "world.glb")
     photo = world_photo(data / "godot" / "world.glb", mosaic)
     homeless = track_tiles.write(
         work / "world.glb",
@@ -478,11 +481,45 @@ def write_surfaces(experiment, track_id, circuit, directory, work, manifest, cro
         placed,
     )
     tile_count = len(json.loads((directory / "tiles.json").read_text())["tiles"])
+    faults = [
+        fault
+        for tile in sorted((directory / "tiles").glob("*.glb"))
+        for fault in buildings.audit(tile).values()
+    ]
+    print(f"{track_id}: {faults.count(None)} of {len(faults)} buildings in the tiles are closed")
     print(f"{track_id}: {tile_count} tiles; {homeless} trees and sign parts stood on none")
     wooded = track_tiles.write_canopy(
         directory, mosaic, photo, origin, tree_instances(kept), crowns
     )
     print(f"{track_id}: a canopy over {wooded} tiles")
+
+
+def write_buildings(experiment, frame, extract, surveyed, height_m, data, world_glb):
+    """Write the buildings the map shows into `world_glb`, in place of the experiment's.
+
+    They stand on the terrain `height_m` gives, under the roofs of the LiDAR surface model,
+    with the facades the experiment gave them.
+    """
+    track_id = data.name
+
+    def ground_m(points):
+        return height_m(points[:, 0], points[:, 1])
+
+    def photo_albedo(points):
+        return surveyed.albedo_at(*surveyed.pixel(points[:, 0], points[:, 1]))
+
+    built, made = buildings.build(
+        extract.areas,
+        buildings.read_surface(experiment / frame["dtm"].replace(*SURFACE_MODEL), frame["origin"]),
+        ground_m,
+        photo_albedo,
+        buildings.mapped_facades(data / "godot" / "world.glb"),
+        {kind: len(facade[3]) for kind, facade in FACADES.items()},
+    )
+    buildings.write(world_glb, built)
+    print(f"{track_id} buildings: {dict(made)}")
+    print(f"{track_id} roof shapes: {dict(Counter(building.shape for building in built))}")
+    print(f"{track_id} roofs: {dict(Counter(building.roofing for building in built))}")
 
 
 def world_photo(world_glb, mosaic):

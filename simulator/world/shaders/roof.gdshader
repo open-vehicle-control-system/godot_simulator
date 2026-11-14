@@ -1,11 +1,10 @@
 // A roof: a tiled roofing texture set whose rows run along the eave, tinted to the roof's own
 // colour, with a dark trim along its edge. UV is (metres along the eave, metres up the
-// slope); the vertex colour is the roof's albedo, its alpha the distance to the roof's edge
-// over EDGE_RANGE_M.
+// slope); UV2 holds the distances in metres to two edges of the roof, the smaller being the
+// distance to the roof's edge; the vertex colour is the roof's albedo.
 shader_type spatial;
 render_mode cull_disabled;
 
-const float EDGE_RANGE_M = 2.0;
 const float TRIM_WIDTH_M = 0.18;
 const float TRIM_SHADE = 0.45;
 // How much of the set's own shading the tint keeps.
@@ -34,12 +33,12 @@ float value_noise(vec2 at) {
 }
 
 varying vec3 roof_albedo;
-varying float edge_m;
+varying vec2 edges_m;
 varying vec3 world_position;
 
 void vertex() {
 	roof_albedo = COLOR.rgb;
-	edge_m = COLOR.a * EDGE_RANGE_M;
+	edges_m = UV2;
 	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
@@ -52,7 +51,7 @@ void fragment() {
 	float streaks = value_noise(vec2(UV.x * 1.7, UV.y * 0.12));
 	float patches = value_noise(UV * 0.23 + 11.0);
 	float weather = 1.0 - STREAK_SHADE * streaks * streaks - PATCH_SHADE * patches;
-	float trim = 1.0 - smoothstep(TRIM_WIDTH_M * 0.6, TRIM_WIDTH_M, edge_m);
+	float trim = 1.0 - smoothstep(TRIM_WIDTH_M * 0.6, TRIM_WIDTH_M, min(edges_m.x, edges_m.y));
 	ALBEDO = roof_albedo * clamp(grain, 0.0, 3.0) * weather * mix(1.0, TRIM_SHADE, trim);
 	ROUGHNESS = texture(roofing_roughness, roofing_uv).r;
 	SPECULAR = 0.35;

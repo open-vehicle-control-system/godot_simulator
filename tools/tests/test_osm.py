@@ -22,6 +22,10 @@ EXTRACT = """<?xml version='1.0' encoding='utf-8'?>
  <node id="4" lat="50.797815" lon="4.360215833" />
  <node id="5" lat="50.798815" lon="4.359215833">
   <tag k="highway" v="give_way" /><tag k="direction" v="forward" /></node>
+ <node id="6" lat="50.798115" lon="4.359515833" />
+ <node id="7" lat="50.798515" lon="4.359515833" />
+ <node id="8" lat="50.798515" lon="4.359915833" />
+ <node id="9" lat="50.798115" lon="4.359915833" />
  <way id="10"><nd ref="1" /><nd ref="2" /><nd ref="99" />
   <tag k="highway" v="service" /><tag k="surface" v="gravel" /></way>
  <way id="11"><nd ref="1" /><nd ref="2" /><nd ref="3" /><nd ref="4" /><nd ref="1" />
@@ -32,6 +36,11 @@ EXTRACT = """<?xml version='1.0' encoding='utf-8'?>
  <relation id="20"><member type="way" ref="12" role="outer" />
   <member type="way" ref="13" role="outer" />
   <tag k="type" v="multipolygon" /><tag k="amenity" v="parking" /><tag k="name" v="P1" />
+ </relation>
+ <way id="15"><nd ref="6" /><nd ref="7" /><nd ref="8" /><nd ref="9" /><nd ref="6" /></way>
+ <relation id="21"><member type="way" ref="12" role="outer" />
+  <member type="way" ref="13" role="outer" /><member type="way" ref="15" role="inner" />
+  <tag k="type" v="multipolygon" /><tag k="building" v="yes" />
  </relation>
 </osm>
 """
@@ -95,6 +104,17 @@ class ReadTest(unittest.TestCase):
 
         self.assertEqual(len(named), 1)
         self.assertEqual(len(named[0].points), 4)
+
+    def test_a_multipolygon_keeps_its_inner_ways_as_holes(self):
+        (building,) = [area for area in extract().areas if "building" in area.tags]
+
+        self.assertEqual(len(building.holes), 1)
+        self.assertEqual(len(building.holes[0]), 4)
+        self.assertTrue(np.all(building.holes[0] > building.points.min(0)))
+        self.assertTrue(np.all(building.holes[0] < building.points.max(0)))
+
+    def test_an_area_mapped_as_one_way_has_no_hole(self):
+        self.assertEqual(extract().parkings()[0].holes, [])
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ import math
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
 
+import footprints
 import numpy as np
 
 # Belgian Lambert 2008: a Lambert conformal conic projection of the GRS80 ellipsoid.
@@ -65,10 +66,14 @@ class Way:
 
 @dataclass
 class Area:
-    """A tagged outline: a closed ring of positions, its first point not repeated."""
+    """A tagged outline: a closed ring of positions, its first point not repeated.
+
+    `holes` are the rings cut out of it, as a building's courtyards.
+    """
 
     tags: dict
     points: np.ndarray
+    holes: list = field(default_factory=list)
 
 
 @dataclass
@@ -146,13 +151,22 @@ def read(path, origin):
         tags = _tags(relation)
         if tags.get("type") != "multipolygon":
             continue
-        outers = [
-            node_lists[member.get("ref")]
-            for member in relation.findall("member")
-            if member.get("type") == "way"
-            and member.get("role") in ("outer", "")
-            and member.get("ref") in node_lists
-        ]
-        for ring in _rings(outers):
-            extract.areas.append(Area(tags, points(ring[:-1])))
+        members = {
+            role: [
+                node_lists[member.get("ref")]
+                for member in relation.findall("member")
+                if member.get("type") == "way"
+                and member.get("role") in roles
+                and member.get("ref") in node_lists
+            ]
+            for role, roles in (("outer", ("outer", "")), ("inner", ("inner",)))
+        }
+        holes = [points(ring[:-1]) for ring in _rings(members["inner"])]
+        for ring in _rings(members["outer"]):
+            outline = points(ring[:-1])
+            extract.areas.append(
+                Area(
+                    tags, outline, [hole for hole in holes if footprints.contains(outline, hole[0])]
+                )
+            )
     return extract

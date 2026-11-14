@@ -1,6 +1,7 @@
-// A building wall: a tiled texture with a tint, and windows drawn in metres. UV is (metres
-// along the wall, 1 - metres above the ground) / 3; UV2.x is the wall's height in metres, so
-// windows stay below the eaves.
+// A building wall: a tiled texture with a tint; windows in rows a storey apart and a door,
+// drawn in metres and centred on the wall. UV is (metres along the wall from its corner,
+// 1 - metres above its ground floor) / 3; UV2 is (the wall's top above its ground floor, the
+// wall's length) in metres, so windows stay below the eaves and clear of the corners.
 shader_type spatial;
 render_mode cull_back;
 
@@ -16,10 +17,23 @@ uniform float size_m = 3.0;
 uniform int windows = 0;
 uniform vec3 tint : source_color = vec3(1.0);
 
+const float HOUSE_BAY_M = 3.2;
+const float HOUSE_STOREY_M = 3.0;
+const float OFFICE_BAY_M = 2.7;
+const float OFFICE_STOREY_M = 3.6;
+const float HALL_PANE_M = 1.6;
+const float HALL_MARGIN_M = 0.8;
+const float HALL_DOOR_M = 3.6;
+const float HALL_BAND_MAX_SLOPE = 0.15;
+// The share of walls that have a door, long enough for one.
+const float DOOR_SHARE = 0.4;
+
 varying float wall_top_m;
+varying flat float wall_length_m;
 
 void vertex() {
 	wall_top_m = UV2.x;
+	wall_length_m = UV2.y;
 }
 
 float inside(vec2 at, vec2 low, vec2 high) {
@@ -38,26 +52,54 @@ void fragment() {
 
 	float glass = 0.0;
 	float frame = 0.0;
-	if (windows == HOUSE) {
-		vec2 cell = vec2(mod(at_m.x, 3.2), mod(at_m.y, 2.8));
-		float allowed = step(0.4, at_m.y) * step(at_m.y + 0.7, wall_top_m);
-		frame = inside(cell, vec2(0.95, 0.80), vec2(2.25, 2.25)) * allowed;
-		glass = inside(cell, vec2(1.03, 0.88), vec2(2.17, 2.17)) * allowed;
-		glass *= 1.0 - inside(cell, vec2(1.57, 0.88), vec2(1.63, 2.17));
-	} else if (windows == HALL) {
+	float door = 0.0;
+	// A number of the wall's own, the same all over it.
+	float picked = fract(sin(wall_length_m * 12.9898) * 43758.5453);
+	if (windows == HALL) {
 		float band_from_m = wall_top_m - 1.9;
 		float band = step(band_from_m, at_m.y) * step(at_m.y, band_from_m + 1.0) * step(3.0, wall_top_m);
+		band *= step(HALL_MARGIN_M, at_m.x) * step(at_m.x, wall_length_m - HALL_MARGIN_M);
+		// A gable end's top slopes: a band hung from it would slope too.
+		float top_slope = length(vec2(dFdx(wall_top_m), dFdy(wall_top_m))) / max(length(vec2(dFdx(at_m.x), dFdy(at_m.x))), 1e-6);
+		band *= step(top_slope, HALL_BAND_MAX_SLOPE);
+		float pane = fract((at_m.x - HALL_MARGIN_M) / HALL_PANE_M);
 		frame = band;
-		glass = band * step(0.06, fract(at_m.x / 1.6)) * step(fract(at_m.x / 1.6), 0.96);
+		glass = band * step(0.06, pane) * step(pane, 0.96);
+		float from_middle_m = abs(at_m.x - wall_length_m * 0.5);
+		float has_door = step(picked, DOOR_SHARE) * step(HALL_DOOR_M * 2.0, wall_length_m) * step(4.5, wall_top_m);
+		door = has_door * step(from_middle_m, HALL_DOOR_M * 0.5) * step(0.0, at_m.y) * step(at_m.y, 3.6);
 	} else {
-		vec2 cell = vec2(mod(at_m.x, 2.7), mod(at_m.y, 3.6));
-		float allowed = step(0.6, at_m.y) * step(at_m.y + 0.9, wall_top_m);
-		frame = inside(cell, vec2(0.25, 0.85), vec2(2.45, 2.75)) * allowed;
-		glass = inside(cell, vec2(0.32, 0.92), vec2(2.38, 2.68)) * allowed;
+		float bay_m = windows == HOUSE ? HOUSE_BAY_M : OFFICE_BAY_M;
+		float storey_m = windows == HOUSE ? HOUSE_STOREY_M : OFFICE_STOREY_M;
+		float bays = max(floor(wall_length_m / bay_m), step(2.0, wall_length_m));
+		float from_first_m = at_m.x - (wall_length_m - bays * bay_m) * 0.5;
+		float bay = floor(from_first_m / bay_m);
+		float storey = floor(at_m.y / storey_m);
+		vec2 cell = vec2(from_first_m - bay * bay_m, at_m.y - storey * storey_m);
+		float allowed = step(0.0, bay) * step(bay, bays - 0.5) * step(0.0, at_m.y);
+		float has_door = step(picked, DOOR_SHARE) * step(1.0, bays) * step(2.6, wall_top_m);
+		float at_door = has_door * step(abs(bay - floor(bays * 0.5)), 0.5) * step(abs(storey), 0.5);
+		if (windows == HOUSE) {
+			float fits = step((storey + 1.0) * storey_m - 0.3, wall_top_m) * (1.0 - at_door);
+			frame = inside(cell, vec2(0.95, 0.90), vec2(2.25, 2.35)) * allowed * fits;
+			glass = inside(cell, vec2(1.03, 0.98), vec2(2.17, 2.27)) * allowed * fits;
+			glass *= 1.0 - inside(cell, vec2(1.57, 0.98), vec2(1.63, 2.27));
+			door = inside(cell, vec2(1.1, 0.0), vec2(2.1, 2.1)) * allowed * at_door;
+		} else {
+			float fits = step((storey + 1.0) * storey_m - 0.4, wall_top_m) * (1.0 - at_door);
+			frame = inside(cell, vec2(0.25, 0.85), vec2(2.45, 2.75)) * allowed * fits;
+			glass = inside(cell, vec2(0.32, 0.92), vec2(2.38, 2.68)) * allowed * fits;
+			frame = max(frame, inside(cell, vec2(0.35, 0.0), vec2(2.35, 2.4)) * allowed * at_door);
+			glass = max(glass, inside(cell, vec2(0.43, 0.08), vec2(2.27, 2.32)) * allowed * at_door);
+			glass *= 1.0 - at_door * inside(cell, vec2(1.32, 0.0), vec2(1.38, 2.4));
+		}
 	}
 	vec3 frame_colour = windows == HALL ? vec3(0.2, 0.21, 0.23) : vec3(0.6, 0.6, 0.58);
 	vec3 colour = mix(wall, frame_colour, frame);
 	colour = mix(colour, vec3(0.02, 0.03, 0.04), glass);
+	vec3 door_colour = windows == HALL ? vec3(0.45, 0.47, 0.5) * (0.85 + 0.15 * step(0.08, fract(at_m.y / 0.6))) : vec3(0.1, 0.07, 0.05);
+	colour = mix(colour, door_colour, door);
+	frame = max(frame, door);
 	// Dirt gathers at the foot of a wall.
 	colour *= mix(0.72, 1.0, smoothstep(0.0, 1.2, at_m.y));
 	ALBEDO = colour;

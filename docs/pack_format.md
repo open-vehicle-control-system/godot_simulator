@@ -210,8 +210,8 @@ size.
 | Surface | Draws | Takes |
 |---|---|---|
 | `terrain` | the ground and what lies on it: the `ground`'s layers under the orthophoto, the lap's road with its lines, kerbs and rubber, the roads around it with their markings, and the parking lots with their bays | the tile's photo and maps, UV 0 across the tile |
-| `roof` | a roofing texture set whose rows run along the eave, tinted to the roof's colour, with a dark trim along its edge | `textures`, `size_m`; UV 0 = (metres along the eave, metres up the slope); vertex colour = the roof's albedo (linear RGB), its alpha the distance to the roof's edge over 2 m |
-| `facade` | a tiled wall with windows drawn in metres and dirt at its foot | `textures`, `size_m` (the width the set covers), `windows` (`house`, `hall` or `office`), `tint` (RGB factors); UV 0 = (metres along the wall, 1 - metres above the ground) / 3, UV 1 x = the wall's height in metres |
+| `roof` | a roofing texture set whose rows run along the eave, tinted to the roof's colour, with a dark trim along its edge | `textures`, `size_m`; UV 0 = (metres along the eave, metres up the slope); UV 1 = the distances in metres to two edges of the roof, each a plane over its triangle (the smaller is the distance to the roof's edge; 100 for none); vertex colour = the roof's albedo (linear RGB) |
+| `facade` | a tiled wall with rows of windows a storey apart and a door, centred on the wall, and dirt at its foot | `textures`, `size_m` (the width the set covers), `windows` (`house`, `hall` or `office`), `tint` (RGB factors); UV 0 = (metres along the wall from its corner, 1 - metres above its ground floor) / 3, UV 1 = (the wall's top above its ground floor, the wall's length) in metres; a face with a length of 0 (a floor) gets no window |
 | `plain` | a texture set projected in world space (walls, barriers) | `textures`, `size_m`, `tint` |
 | `seats` | grandstand steps with rows of seats and stair aisles | `textures` (the concrete), `tint` (the seats); UV 0 = (metres along the stand, 1 - metres of depth), UV 1 = (row depth in metres, 1 - face kind: 0 tread, 1 riser, 2 plain) |
 
