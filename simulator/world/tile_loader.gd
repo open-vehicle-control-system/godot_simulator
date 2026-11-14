@@ -56,9 +56,10 @@ func _read(content: TileContent) -> String:
 		return ground["error"]
 	content.ground_images = ground["images"]
 	var samples := _track.tiles.ground_samples()
-	content.heights_m = FileAccess.get_file_as_bytes(tile.path(".ground.f32")).to_float32_array()
-	if content.heights_m.size() != samples * samples:
+	var heights_m := FileAccess.get_file_as_bytes(tile.path(".ground.f32")).to_float32_array()
+	if heights_m.size() != samples * samples:
 		return "%s does not hold %d by %d heights" % [tile.key + ".ground.f32", samples, samples]
+	content.ground_patches = GroundPatch.split(heights_m, samples)
 	return _stand_objects(content)
 
 

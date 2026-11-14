@@ -136,25 +136,23 @@ func _set_up_body_shape() -> void:
 
 func _clear_share_of_move(target: Transform3D) -> float:
 	## The share of the move to `target` the body makes before touching an obstacle: 1 when
-	## clear. A move away from an obstacle the body already touches is always clear.
+	## clear. Already into an obstacle, it moves freely away from it and not at all into it.
 	var motion := target.origin - global_position
 	if motion.is_zero_approx():
 		return 1.0
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = _body_shape
+	query.collision_mask = CollisionLayers.OBSTACLES
 	query.transform = (
 		Transform3D(target.basis, global_position) * Transform3D(Basis.IDENTITY, _body_centre)
 	)
-	query.motion = motion
 	var space := get_world_3d().direct_space_state
-	var clear_share: float = space.cast_motion(query)[0]
-	if clear_share >= 1.0:
-		return 1.0
-	query.motion = Vector3.ZERO
+	# A sweep ignores what the shape starts inside of: that is asked first.
 	var touching := space.get_rest_info(query)
-	if not touching.is_empty() and motion.dot(touching["normal"]) >= 0.0:
-		return 1.0
-	return clear_share
+	if not touching.is_empty():
+		return 1.0 if motion.dot(touching["normal"]) >= 0.0 else 0.0
+	query.motion = motion
+	return space.cast_motion(query)[0]
 
 
 func _on_ground(origin: Vector3, heading: Vector3) -> Transform3D:

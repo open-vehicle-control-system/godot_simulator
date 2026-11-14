@@ -34,6 +34,8 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `world/track_tiles.gd`, `world/tile_ring.gd` | The world, streamed: which tiles are loaded, collide and are freed as the vehicle moves |
 | `world/tile_loader.gd`, `world/tile_content.gd` | A tile read from its files on a worker thread, then built into a scene on the main thread |
 | `world/tile_collision.gd` | A tile's collision: its ground's heights, the meshes standing on it, trunks and posts |
+| `world/ground_patch.gd` | A square piece of a tile's height grid, a height map each. Pure |
+| `world/shape_body.gd`, `world/collision_layers.gd` | Shapes in one static body of the physics server; the layers of the ground and of what stands on it |
 | `world/far_terrain.gd` | The coarse terrain shown where a tile is not loaded |
 | `packs/surface_rule.gd`, `packs/ground_spec.gd`, `packs/trees_spec.gd`, `packs/signs_spec.gd` | A track's surfaces, ground layers, trees and signs, validated |
 | `world/surface_materials.gd`, `world/shaders/` | The simulator's surfaces: materials built from the pack's textures and maps |
@@ -43,17 +45,17 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `world/instance_batch.gd` | Copies of one mesh about a centre, filled on any thread, drawn and culled together |
 | `world/sky_sun.gd` | Finds the sun in a panorama. Pure |
 | `view/screenshot.gd` | Saves the window and reports what the window and the other viewports cost to render |
-| `view/frame_times.gd` | Reports when the first frame was drawn, the worst frame times after it, the GPU's time over all viewports and what was drawn (`--timing`) |
+| `view/frame_times.gd` | Reports when the first frame was drawn, the worst frame times after it, a physics step's time, the GPU's time over all viewports and what was drawn (`--timing`) |
 | `link/link_protocol.gd` | The link's packets and the Godot ↔ ROS frames. Pure |
 | `link/simulator_link.gd` | The link's TCP client |
 | `sensors/stereo_camera.gd` | The stereo pair's cameras and intrinsics |
+| `sensors/lens_distortion.gd`, `sensors/shaders/distortion.inc` | A lens's distortion in OpenCV's model, on the CPU and on the GPU |
+| `sensors/camera_effect.gd`, `sensors/shaders/camera.comp` | What makes a stereo camera's view the image of a camera: distortion, motion blur, vignetting, noise, exposure ([Stereo camera](./stereo.md#cameras-not-pinholes)) |
+| `sensors/compute_shader.gd` | Compiles the compute shaders, with their includes |
 | `sensors/stereo_sender.gd`, `sensors/stereo_recorder.gd` | Pairs to the link, frames to disk |
 | `sensors/stereo_frame.gd`, `sensors/numpy_file.gd` | What the camera shows of one frame; a float map as a `.npy` file |
 | `sensors/segmentation.gd`, `sensors/shaders/label.gdshader`, `label.gdshaderinc` | The segmentation classes, and how a surface shows its class to the ground truth camera |
 | `sensors/ground_truth_camera.gd`, `sensors/ground_truth_effect.gd`, `sensors/shaders/ground_truth.comp` | The left camera's view as depth, disparity and segmentation ([Stereo camera](./stereo.md#ground-truth)) |
-| `sensors/lens_distortion.gd`, `sensors/shaders/distortion.inc` | A lens's distortion in OpenCV's model, on the CPU and on the GPU |
-| `sensors/camera_effect.gd`, `sensors/shaders/camera.comp` | What makes a stereo camera's view the image of a camera: distortion, motion blur, vignetting, noise, exposure ([Stereo camera](./stereo.md#cameras-not-pinholes)) |
-| `sensors/compute_shader.gd` | Compiles the compute shaders, with their includes |
 | `view/viewer.gd`, `view/view_poses.gd` | The views, the HUD and the keys |
 
 Logic that only computes is in scripts of static functions, tested without a scene; nodes hold
@@ -82,10 +84,30 @@ reports show that, as a real vehicle's would. There is no tyre slip model beyond
 weight transfer and no suspension dynamics: a vehicle moved by its own forces is OVCS's TASK-81.
 
 The vehicle does not pass through what it hits. Before every move its body box (raised off the
-ground so kerbs and bumps never stop it) is swept along the move; if the track's collision is in
+ground so kerbs never reach it) is swept along the move; if the track's collision is in
 the way (walls, barriers, buildings, tree trunks, sign posts) it goes as far as is clear and stops there,
-speed zero, odometer stopped, which is what OVCS then reads. A move away from what it touches is
-always allowed, so it can back off or turn away.
+speed zero, odometer stopped, which is what OVCS then reads. The ground is on a physics layer
+of its own (`CollisionLayers`) that the wheels' rays see and the sweep does not, so a crest or a
+bank reaching the box never stops it. A sweep ignores what the box is already into, so that is
+asked first: a body into an obstacle moves freely away from it, to back off or turn away, and
+not at all further into it.
+
+## Physics
+
+The physics engine is Jolt (`physics/3d/physics_engine` in `project.godot`). Nothing is
+simulated: the simulator only asks the world questions, four rays and a body sweep a step. Jolt
+answers a ray in 1.9 µs and the sweep in 3 µs on Spa, where Godot Physics took 2.4 µs and
+110 µs: over a lap a physics step takes 0.6 to 0.8 ms where it took 1.0 ms (the rest of a step
+is the tiles' and the link's own work), and the worst frame is the same.
+
+Jolt builds a shape the first time it is used in a space, not when its data is set, and a height
+map costs it 45 ns a sample: 12 ms for a tile's 513 by 513 heights. So a tile's ground is cut
+into patches of 128 squares a side (`GroundPatch`), a height map each, built in about a
+millisecond, and every shape is built ahead by asking a query about it far from everything
+(`TileCollision.prepare_next_shape`): those of the tiles loaded at start before the first
+frame, which is drawn 0.14 s later for it. The shapes are held by bodies of the physics server
+(`ShapeBody`), not by `CollisionShape3D` nodes: in a debug build of the engine, assigning a shape
+to a node sets its debug colour, which has the shape built again.
 
 ## The world, streamed
 
@@ -107,13 +129,14 @@ near the vehicle, so a track of any size starts in about a second and costs the 
   Checked every physics step before the vehicle moves; a tile that should collide and is not
   loaded (the vehicle was moved there) is loaded at once, so the ground rays and the body
   sweep never meet missing collision.
-- **The ground collides as a height grid** the builder samples from the drawn ground: making
-  one costs half a millisecond, where triangles cost 0.6 µs each on the main thread whichever
-  thread asks. Only what stands on the ground collides as triangles, in shapes of a few
-  thousand made one a frame once the tile is in the scene, ahead of the vehicle's coming.
+- **The ground collides as a height grid** the builder samples from the drawn ground, cut into
+  square patches; only what stands on the ground collides as triangles, in lots of a few
+  thousand. Each patch and each lot is a shape made and built within a millisecond or two, one
+  a frame once the tile is in the scene, ahead of the vehicle's coming; a tile whose shapes
+  are built starts colliding in 0.2 ms.
 
 `--timing` prints when the first frame was drawn and, every five seconds, the worst frame and
-how many ran over 33 ms, what the GPU spent on all viewports (the window, the stereo pair, the
+how many ran over 33 ms, what a physics step took, what the GPU spent on all viewports (the window, the stereo pair, the
 mirrors) with where the vehicle was when it spent the most, and the draw calls, objects and
 primitives of a frame.
 

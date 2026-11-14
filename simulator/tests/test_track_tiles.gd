@@ -77,6 +77,17 @@ func test_the_tiles_around_the_spawn_are_loaded_at_once_the_near_ones_with_colli
 	world.free()
 
 
+func test_the_collision_of_the_tiles_loaded_at_start_is_made_before_the_first_frame() -> void:
+	var world := _row_world("made_at_start", 8)
+	world.start_radius_m = 35.0
+	world.load_around(Vector3(70.0, 0.0, 0.0))
+
+	add_child(world)
+
+	assert_eq(world.preparing_keys(), [] as Array[String])
+	world.free()
+
+
 func test_the_ground_is_solid_the_moment_its_tile_is_loaded() -> void:
 	var world := _row_world("solid_at_once", 4)
 	add_child(world)
@@ -106,6 +117,34 @@ func test_the_ground_follows_the_heights_of_its_tile() -> void:
 	var hit := _ground_below(Vector3(4.0, 0.0, 3.0), 20.0)
 
 	assert_almost_eq(hit, Vector3(4.0, 0.1 * 4.0 + 0.3 * 13.0, 3.0), 1e-3)
+	world.queue_free()
+
+
+func test_the_ground_is_whole_across_its_patches() -> void:
+	var directory := PackFixtures.fresh_directory("tiles_patches")
+	var pack := PackFixtures.write_pack(directory, PackFixtures.track_manifest("flat"))
+	# Three patches a side.
+	var samples := 2 * GroundPatch.QUADS + 5
+	var step_m := 0.25
+	var size_m := (samples - 1) * step_m
+	PackFixtures.write_tile_index(pack, size_m, step_m, {"a": Vector2.ZERO})
+	PackFixtures.write_flat_tile(pack, "a", Vector2.ZERO, size_m, 0.0, "Terrain_a", "")
+	# Rising 0.1 m per metre towards +X and 0.3 m per metre towards +Z, from the corner.
+	var heights := PackedFloat32Array()
+	for row in samples:
+		for column in samples:
+			heights.append((0.1 * column + 0.3 * row) * step_m)
+	PackFixtures.write_ground_heights(pack, "a", heights)
+	var track: TrackSpec = PackLibrary.scan([directory]).load_track("flat")["track"]
+	track.move_spawn(Vector3(size_m * 0.5, size_m * 0.5, 0.0), 0.0)
+	var world: TrackTiles = TrackWorld.load_world(track)["world"]
+	add_child(world)
+
+	var seam_m := GroundPatch.QUADS * step_m
+	for x in [1.0, seam_m - 0.01, seam_m, seam_m + 0.01, 2.0 * seam_m, size_m - 0.3]:
+		for z in [0.7, seam_m, 2.0 * seam_m + 0.4]:
+			var hit := _ground_below(Vector3(x, 0.0, z), 60.0)
+			assert_almost_eq(hit, Vector3(x, 0.1 * x + 0.3 * z, z), 1e-3)
 	world.queue_free()
 
 
@@ -230,8 +269,8 @@ func test_obstacles_too_many_for_one_shape_are_all_solid() -> void:
 	for height_m in [8.0, 5.0, 2.0]:
 		var hit := _ground_below(Vector3(3.0, height_m - 9.0, 4.0), 10.0)
 		assert_almost_eq(hit, Vector3(3.0, height_m, 4.0), 1e-4)
-	var solid: Node = world.get_node("Tile_a/Collision/Solid")
-	assert_eq(solid.get_child_count(), 4, "the ground and a shape per slab")
+	var solid: ShapeBody = world.get_node("Tile_a/Collision/Solid")
+	assert_eq(solid.shape_count(), 3, "a shape per slab")
 	world.queue_free()
 
 

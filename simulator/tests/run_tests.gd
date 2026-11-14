@@ -31,6 +31,8 @@ func _run() -> void:
 			test_count += 1
 			test_case.current_test = "%s:%s" % [script_path.get_file(), test_name]
 			await test_case.call(test_name)
+			# What the test queued to free is gone before the next one starts.
+			await process_frame
 		failures.append_array(test_case.failures)
 		test_case.queue_free()
 		await process_frame

@@ -224,6 +224,32 @@ static func write_flat_tile(
 	file.store_buffer(heights.to_byte_array())
 
 
+static func write_ridge_world(
+	pack_directory: String, ridge_height_m: float, wall_face_z: float
+) -> void:
+	## One tile `a`, 40 m wide and centred on the origin: flat ground whose heights rise to
+	## `ridge_height_m` along the line x = 0, between a vehicle's wheels, and a wall across that
+	## line, a mesh of the tile, its near face at `wall_face_z`.
+	var size_m := 40.0
+	var step_m := 0.5
+	var corner := Vector2(-0.5, -0.5) * size_m
+	write_tile_index(pack_directory, size_m, step_m, {"a": corner})
+	DirAccess.make_dir_recursive_absolute(pack_directory.path_join("tiles"))
+	var root := Node3D.new()
+	root.name = "Tile"
+	var ground := PlaneMesh.new()
+	ground.size = Vector2(size_m, size_m)
+	_add_mesh(root, "Ground", ground, Vector3.ZERO)
+	_add_mesh(root, "Wall", _box(Vector3(20.0, 3.0, 1.0)), Vector3(0.0, 1.5, wall_face_z + 0.5))
+	_write_gltf(root, pack_directory.path_join("tiles/a.glb"))
+	var samples := roundi(size_m / step_m) + 1
+	var heights := PackedFloat32Array()
+	heights.resize(samples * samples)
+	for row in samples:
+		heights[row * samples + samples / 2] = ridge_height_m
+	write_ground_heights(pack_directory, "a", heights)
+
+
 static func write_slabs_tile(pack_directory: String, heights_m: Array, triangles: int) -> void:
 	## One tile `a`, 20 m wide and centred on the origin, its ground at height 0, holding a
 	## flat mesh of at least `triangles` triangles at each of `heights_m`, none of them ground.

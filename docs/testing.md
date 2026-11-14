@@ -15,7 +15,8 @@ named `test_*`. It runs inside the scene tree, so a test may add nodes and
 `await wait_physics_frames(count)`. Assertions: `assert_true`, `assert_eq`, `assert_almost_eq`
 (numbers or vectors), `fail`. The runner exits with 1 when a test fails or a script does not
 load, and `run_tests.sh` also fails the run when Godot reports a `SCRIPT ERROR`: an error inside
-a test aborts it without failing an assertion.
+a test aborts it without failing an assertion. A frame passes between two tests, so what one
+queued to free is gone before the next starts.
 
 Helpers:
 

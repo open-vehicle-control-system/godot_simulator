@@ -2,8 +2,9 @@ class_name FrameTimes
 extends Node
 ## Reports how long the simulator took to show its first frame and, every few seconds, how
 ## long the frames after it take while the track's tiles stream in: the worst one and how many
-## ran over budget, what the GPU spent rendering every viewport (the window, the stereo pair,
-## the mirrors), where the vehicle was when it spent the most, and what was drawn.
+## ran over budget, what a physics step took (the vehicle's queries of the world, the tiles'
+## collision), what the GPU spent rendering every viewport (the window, the stereo pair, the
+## mirrors), where the vehicle was when it spent the most, and what was drawn.
 
 const REPORT_INTERVAL_S := 5.0
 const BUDGET_MS := 33.0
@@ -17,6 +18,8 @@ var _frames := 0
 var _worst_ms := 0.0
 var _over_budget := 0
 var _since_report_s := 0.0
+var _physics_ms := 0.0
+var _worst_physics_ms := 0.0
 var _gpu_ms := 0.0
 var _worst_gpu_ms := 0.0
 var _worst_gpu_at := Vector3.ZERO
@@ -44,6 +47,9 @@ func _process(delta: float) -> void:
 		if frame_ms > BUDGET_MS:
 			_over_budget += 1
 	_last_frame_usec = now_usec
+	var physics_ms := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+	_physics_ms += physics_ms
+	_worst_physics_ms = maxf(_worst_physics_ms, physics_ms)
 	_measure_rendering()
 	_since_report_s += delta
 	if _since_report_s < REPORT_INTERVAL_S:
@@ -65,6 +71,9 @@ func _process(delta: float) -> void:
 	var at := _worst_gpu_at
 	var frames := maxi(_frames, 1)
 	print(
+		"timing: physics %.3f ms a step, worst %.3f ms" % [_physics_ms / frames, _worst_physics_ms]
+	)
+	print(
 		(
 			"timing: GPU %.1f ms a frame, worst %.1f ms at %.0f,%.0f,%.0f; "
 			% [_gpu_ms / frames, _worst_gpu_ms, at.z, at.x, at.y]
@@ -78,6 +87,8 @@ func _process(delta: float) -> void:
 	_frames = 0
 	_worst_ms = 0.0
 	_over_budget = 0
+	_physics_ms = 0.0
+	_worst_physics_ms = 0.0
 	_gpu_ms = 0.0
 	_worst_gpu_ms = 0.0
 	_draw_calls = 0

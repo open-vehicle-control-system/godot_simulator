@@ -31,7 +31,7 @@ var _loaded: Dictionary[String, TileContent] = {}
 var _colliding: Dictionary[String, Node3D] = {}
 var _loading: Dictionary[String, int] = {}  # tile key -> worker task
 var _finished: Array[TileContent] = []  # filled by worker threads, under _mutex
-var _unprepared: Array[TileContent] = []  # in the scene, obstacle shapes still to make
+var _unprepared: Array[TileContent] = []  # in the scene, shapes of their collision still to make
 var _refused: Dictionary[String, bool] = {}  # tiles whose files are wrong, not tried again
 var _mutex := Mutex.new()
 var _since_scan_s := SCAN_INTERVAL_S
@@ -96,10 +96,23 @@ func colliding_keys() -> Array[String]:
 	return _colliding.keys()
 
 
+func preparing_keys() -> Array[String]:
+	## The keys of the tiles in the scene whose collision is not all made yet.
+	var keys: Array[String] = []
+	keys.assign(_unprepared.map(func(content): return content.tile.key))
+	return keys
+
+
 func is_settled() -> bool:
 	## True when every tile within the load radius is in the scene.
 	var wanted := TileRing.within(_tiles.tiles, _point(), load_radius_m)
 	return wanted.all(func(tile): return _loaded.has(tile.key) or _refused.has(tile.key))
+
+
+func _ready() -> void:
+	# What was loaded before the first frame is ready to collide before it.
+	while not _unprepared.is_empty():
+		_prepare_some_collision()
 
 
 func _process(delta: float) -> void:
@@ -228,14 +241,16 @@ func _attach(content: TileContent) -> String:
 
 
 func _prepare_some_collision() -> void:
-	## Makes one obstacle shape of the nearest tile that lacks some, so a tile's collision is
-	## ready before the vehicle comes near it.
+	## Makes one shape of the collision of the nearest tile that lacks some, so a tile's
+	## collision is ready before the vehicle comes near it.
 	var point := _point()
 	var nearest: TileContent = null
 	for content in _unprepared:
 		if nearest == null or _is_nearer(content, nearest, point):
 			nearest = content
-	if nearest != null and not TileCollision.make_next_shape(nearest):
+	if nearest == null:
+		return
+	if not TileCollision.prepare_next_shape(nearest, get_world_3d().direct_space_state):
 		_unprepared.erase(nearest)
 
 
