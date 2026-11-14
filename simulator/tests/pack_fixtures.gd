@@ -160,6 +160,25 @@ static func write_photo_world(pack_directory: String, material_name: String, map
 	write_flat_tile(pack_directory, "a", corner, 20.0, 0.0, "Terrain_a", material_name)
 
 
+static func write_fine_ground_world(pack_directory: String, squares: int) -> void:
+	## One tile `a` under `ground_manifest`: flat ground 20 m wide named `Terrain_a`, drawn by
+	## the terrain surface, of `squares` by `squares` squares of two triangles.
+	var corner := Vector2(-10.0, -10.0)
+	write_tile_index(pack_directory, 20.0, 10.0, {"a": corner})
+	write_flat_tile(pack_directory, "a", corner, 20.0, 0.0, "Ground", "")
+	var root := Node3D.new()
+	root.name = "Tile"
+	var ground := PlaneMesh.new()
+	ground.size = Vector2(20.0, 20.0)
+	ground.subdivide_width = squares - 1
+	ground.subdivide_depth = squares - 1
+	var material := StandardMaterial3D.new()
+	material.resource_name = "M_Photo_a"
+	ground.material = material
+	_add_mesh(root, "Terrain_a", ground, Vector3.ZERO)
+	_write_gltf(root, pack_directory.path_join("tiles/a.glb"))
+
+
 static func write_tile_index(
 	pack_directory: String,
 	tile_size_m: float,

@@ -274,6 +274,33 @@ func test_obstacles_too_many_for_one_shape_are_all_solid() -> void:
 	world.queue_free()
 
 
+func test_distant_ground_is_drawn_with_fewer_triangles() -> void:
+	var ground := _fine_ground("ground_levels", 32)
+
+	assert_true(ground.get_surface_lod_count(0) > 0, "the ground has coarser levels")
+	var coarsest := ground.get_surface_lod_indices(0, ground.get_surface_lod_count(0) - 1)
+	assert_true(coarsest.size() < 32 * 32 * 2 * 3 / 4, "%d indices" % coarsest.size())
+
+
+func test_the_ground_keeps_its_edge_at_every_distance() -> void:
+	# Neighbouring tiles are drawn at different levels: a vertex missing on an edge opens a crack.
+	var ground := _fine_ground("ground_edge", 32)
+
+	var vertices: PackedVector3Array = ground.get_surface_arrays(0)[Mesh.ARRAY_VERTEX]
+	var on_edge := 0
+	for vertex in vertices:
+		if is_equal_approx(maxf(absf(vertex.x), absf(vertex.z)), 10.0):
+			on_edge += 1
+	assert_eq(on_edge, 4 * 32)
+	for level in ground.get_surface_lod_count(0):
+		var kept := {}
+		for index in ground.get_surface_lod_indices(0, level):
+			var vertex := vertices[index]
+			if is_equal_approx(maxf(absf(vertex.x), absf(vertex.z)), 10.0):
+				kept[vertex] = true
+		assert_eq(kept.size(), on_edge, "level %d" % level)
+
+
 func test_the_far_terrain_shows_where_no_tile_is_loaded() -> void:
 	var directory := PackFixtures.fresh_directory("tiles_far")
 	var manifest := PackFixtures.track_manifest("row")
@@ -318,6 +345,26 @@ func _tile(corner: Vector2, size_m: float) -> TilesSpec.Tile:
 	tile.corner = corner
 	tile.bounds = AABB(Vector3(corner.x, 0.0, corner.y), Vector3(size_m, 1.0, size_m))
 	return tile
+
+
+func _fine_ground(test_name: String, squares: int) -> ImporterMesh:
+	## The ground of a tile of `squares` by `squares` squares, as its tile is read.
+	var directory := PackFixtures.fresh_directory("tiles_" + test_name)
+	var pack := PackFixtures.write_pack(directory, PackFixtures.ground_manifest("ground"))
+	PackFixtures.write_fine_ground_world(pack, squares)
+	PackFixtures.write_ground_files(pack)
+	var track: TrackSpec = PackLibrary.scan([directory]).load_track("ground")["track"]
+	var loader := TileLoader.new(track, SurfaceMaterials.new(track), null, null)
+	var content := loader.read_tile(track.tiles.tiles[0])
+	assert_eq(content.error, "")
+	return _mesh_named(content.state, "Terrain_a")
+
+
+func _mesh_named(state: GLTFState, node_name: String) -> ImporterMesh:
+	for node in state.get_nodes():
+		if node.resource_name == node_name:
+			return state.get_meshes()[node.mesh].mesh
+	return null
 
 
 func _row_track(test_name: String, count: int) -> TrackSpec:

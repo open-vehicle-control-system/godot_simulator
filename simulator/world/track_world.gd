@@ -6,7 +6,9 @@ extends RefCounted
 const DEFAULT_SUN_DIRECTION := Vector3(0.39, 0.62, -0.68)
 const SUN_ENERGY := 3.2
 const SUN_COLOUR := Color(1.0, 0.95, 0.87)
-const SUN_ANGULAR_SIZE_DEG := 1.2
+## The sun's disc as seen from the ground: it sets how wide a shadow's edge grows with the
+## distance to what casts it.
+const SUN_ANGULAR_SIZE_DEG := 0.53
 const SHADOW_DISTANCE_M := 320.0
 const SKY_ENERGY := 1.0
 const AMBIENT_ENERGY := 1.0

@@ -166,6 +166,44 @@ per viewport; with the stereo pair that is three viewports.
   the trees start to shrink.
 - **Haze** is exponential fog in the sky's colour, its density from the pack's visibility.
 
+## The ground from near to far
+
+A tile's ground is 33 thousand triangles of terrain and up to 25 thousand of road, and 41
+tiles are loaded around the vehicle at Spa. As a tile is read, on its worker thread, each of
+its ground meshes gets coarser levels (`TileLoader`, 20 ms a mesh), and the renderer draws the
+coarsest whose error is under a pixel on screen, in the picture and in the shadow maps alike:
+a change of level moves nothing by more than that, so nothing pops. Every level keeps all the
+vertices of its mesh's border, so two tiles drawn at different levels meet without a crack.
+Collision does not come from these meshes ([The world, streamed](#the-world-streamed)).
+
+The sun is as wide as the real one, 0.53°: the edge of a shadow widens with the distance to
+what casts it, and the renderer pays for that width in every lit pixel. At 1.2° the shadows
+were softer than a clear day's and cost 4 ms more at Spa's heaviest view.
+
+Measured at that view (ROS 880,363, yaw 123) and among Mettet's houses (ROS -430,245, yaw
+32), frame cap lifted, RX 7800 XT, a 1080p window and the 1280 x 720 pair, GPU time of the
+three viewports:
+
+| | Spa | Mettet |
+|---|---|---|
+| Before | 14.2 ms, 10.8 million primitives | 5.0 ms, 9.2 million |
+| The ground's levels | 13.2 ms, 7.3 million | 4.4 ms, 7.0 million |
+| The sun at 0.53° | 10.3 ms | |
+| Both | 9.6 ms | 4.4 ms |
+
+What was tried and not kept, at the same views:
+
+- **Occlusion culling**, with the terrain (a coarse level of it, lowered by a metre) and the
+  buildings as occluders: 200 to 460 fewer draw calls of 5400 and 2500, and 0.0 to 0.1 ms.
+  Shadow maps are not occlusion culled, and they are most of a frame; in the picture the
+  depth prepass already spares what is hidden its shading. It would also cost the CPU a
+  rasterisation of the occluders per viewport.
+- **Simpler buildings far away**: hiding every building and barrier changes the frame by less
+  than 0.1 ms. A building is a few hundred triangles.
+
+Of the 9.6 ms left at Spa, 5.9 are shadows: 3.7 the soft edges' sampling, 0.5 the ground
+drawn into the shadow maps, the rest the trees'.
+
 ## Screen-space light
 
 The window, and only the window, is lit by what its own picture shows

@@ -6,6 +6,9 @@ extends RefCounted
 ## A lot of obstacle triangles is closed once it holds this many: a shape of them is made
 ## within a couple of milliseconds.
 const OBSTACLE_LOT_FACES := 3000
+## The angles between normals under which the ground's coarser levels merge and split vertices.
+const LEVEL_NORMAL_MERGE_DEG := 60.0
+const LEVEL_NORMAL_SPLIT_DEG := 25.0
 
 var _track: TrackSpec
 var _materials: SurfaceMaterials
@@ -51,6 +54,7 @@ func _read(content: TileContent) -> String:
 	if content.document.append_from_file(tile.path(".glb"), content.state) != OK:
 		return "%s does not load" % tile.path(".glb").get_file()
 	_read_obstacles(content, content.state)
+	_add_ground_levels(content.state)
 	var ground := _materials.read_ground(content.state, tile)
 	if ground.has("error"):
 		return ground["error"]
@@ -81,6 +85,16 @@ func _read_obstacles(content: TileContent, state: GLTFState) -> void:
 			if lots.is_empty() or lots[-1].size() >= OBSTACLE_LOT_FACES * 3:
 				lots.append(PackedVector3Array())
 			_append_faces(lots[-1], mesh.get_surface_arrays(surface), placed)
+
+
+func _add_ground_levels(state: GLTFState) -> void:
+	## Gives the ground's meshes coarser levels, which the renderer draws once their error is
+	## under a pixel. A level keeps every vertex of its mesh's border, so neighbouring tiles
+	## drawn at different levels meet without a crack.
+	var meshes := state.get_meshes()
+	for node in state.get_nodes():
+		if node.mesh >= 0 and _is_ground(node.resource_name, meshes[node.mesh].mesh):
+			meshes[node.mesh].mesh.generate_lods(LEVEL_NORMAL_MERGE_DEG, LEVEL_NORMAL_SPLIT_DEG, [])
 
 
 func _is_ground(mesh_name: String, mesh: ImporterMesh) -> bool:
