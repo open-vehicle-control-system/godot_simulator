@@ -472,6 +472,12 @@ texture.
   something 100 m away keeps 97.6% of its contrast and a hill 1 km away 78%. The cameras feed
   OVCS's vision: nothing within 100 m may lose more than 5% (visibility under 8 km does).
   Haze does not hide a draw distance; the canopy does.
+- **The sun is the size of the real sun**, 0.53 degrees across. A shadow's soft edge widens with
+  the distance to what casts it; at the 1.2 degrees used before, edges were twice as soft as
+  reality and their sampling cost most of the frame (Spa: 14.2 to 10.3 ms of GPU time).
+- **Distant ground is drawn simpler by the simulator**: each tile's terrain and road meshes get
+  coarser levels as the tile is read, every border vertex kept. Builders keep tile meshes cut
+  exactly on tile edges so their borders match at every level.
 - **Check the stereo cameras' own image** before and after (`--stereo-record`): the road, its
   lines and the shadows across it must be as they were.
 
@@ -489,6 +495,13 @@ texture.
   ground maps, collision and objects) and a coarse far terrain, and the simulator loads only the
   tiles near the vehicle. Builders cut terrain, roads and maps on tile edges without seams, and
   assign each mesh and object to one tile.
+- **Textures go into a pack GPU-compressed, with their mipmaps** (DDS: BC1 colour and roughness,
+  BC5 normals, BC3 cut-outs), written by Godot itself (`tools/compress_textures.gd`): a JPEG
+  decoded at start costs 40 to 75 ms, a DDS 0.3 ms, which is most of what made a track start in
+  about a second. Maps that hold exact values (surface, track, road and lot maps) stay PNG.
+- **Every surface and object kind has a ground-truth class.** Segmentation labels come from what
+  is drawn (a surface rule's kind, an object's kind), so a new kind of surface or object needs
+  its class in `simulator/sensors/segmentation.gd` and `docs/stereo.md`, or it is unlabelled.
 - **Build time, not load time.** Smoothing, fitting and classification happen in the builders in
   `tools/`; the simulator only draws what the pack contains.
 - **Generated files are not committed**; a pack's directory under `packs/` holds its manifest,
@@ -530,6 +543,9 @@ texture.
   shader reading gradients beside a discard or a branch (see Terrain and Trees above).
 - **Look from above too.** A high view over the area shows what the road hides: patches under
   lone trees, smeared photo around buildings and in car parks, roofs that do not match the photo.
+- **Run the tests after every shader change.** `tests/test_shaders.gd` compiles every simulator
+  shader headless and fails on one that does not compile; a broken terrain shader otherwise
+  shows only as untextured, white ground.
 - **Measure the frame time** at 1080p; the budget is 16.7 ms per frame for everything.
   `--timing` reports the GPU's time over all viewports, the stereo pair included, with the
   draw calls and primitives; the GPU slows its clock under a frame cap, so compare runs at
@@ -558,11 +574,14 @@ texture.
    remove stairs and seams; fit the track's edges and derive the asphalt's extent, lines, kerbs
    and racing line from them; fit the secondary roads' centrelines and edges and the parking
    lots' outlines and bay grids the same way; make roads and terrain one surface, collision
-   included.
+   included; rebuild every building as a closed solid from its footprint, and check it.
 5. **Then the surfaces**: classify the orthophoto, choose a CC0 texture set per surface type,
    blend photo colour far with texture detail near; give roads and parking lots the surface the
    photo shows, with parked cars removed.
-6. **Then light and atmosphere**, then vegetation, then buildings and roofs (best effort).
+6. **Then light and atmosphere** (the real sun's size, the pack's haze), then vegetation (trees
+   off the roads, draw distance and canopy), then buildings and roofs (best effort), then what
+   stands by the roads (signs and signals from tags and the highway code) and what lies on them
+   (decals where the photo or the lap is evidence).
 7. **After every visible change**, capture the same viewpoints, number the capture, share it
    with one line on what changed, and critique it against reality.
 8. **Cut the tiles** (`tools/track_tiles.py`) from the finished world and keep the budgets:
