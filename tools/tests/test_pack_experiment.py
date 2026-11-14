@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pack_experiment
+from PIL import Image
 
 PROFILE_INSTRUMENTS = {
     "speed": {
@@ -90,6 +91,23 @@ class MaterialNamesTest(unittest.TestCase):
             write_glb(model, ["Paint", "MIRRORS"])
 
             self.assertEqual(pack_experiment.gltf_material_names(model), ["Paint", "MIRRORS"])
+
+
+class CrownColoursTest(unittest.TestCase):
+    """The colour of each kind of tree's crown, from its impostors' atlases."""
+
+    def test_a_kinds_colour_is_its_atlases_opaque_pixels_tinted(self):
+        with tempfile.TemporaryDirectory() as work:
+            atlas = Image.new("RGBA", (4, 2), (255, 0, 0, 0))
+            atlas.paste((0, 255, 0, 255), (0, 0, 2, 2))
+            atlas.save(Path(work) / "fir.png")
+            impostors = [{"atlas": "trees/fir.dds", "kind": "conifer"}]
+
+            colours = pack_experiment.crown_colours(
+                impostors, {"trees/fir.dds": Path(work) / "fir.png"}
+            )
+
+        self.assertEqual(colours, {"conifer": [0.0, 0.95, 0.0]})
 
 
 if __name__ == "__main__":

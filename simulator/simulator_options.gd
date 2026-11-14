@@ -19,7 +19,7 @@ extends RefCounted
 ##   --eye=X,Y,Z             look at the vehicle from this fixed point of the track's frame
 ##   --screenshot=FILE       save the window as a PNG once the world has rendered, then quit
 ##   --timing                report when the first frame was drawn and, every few seconds,
-##                           the worst frame time
+##                           the worst frame time, the GPU time and what was drawn
 
 const DEFAULT_LINK_PORT := 7400
 

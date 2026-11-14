@@ -365,6 +365,45 @@ texture.
   drawn windows and dirt at the foot; clean concrete, not rust-stained, for barriers and
   concrete walls.
 
+### Trees, distance and haze
+
+- **Measure before cutting anything.** What a forest costs is not where it seems: on Spa the
+  trees took 7 to 9.5 ms of a 17 ms frame, 6 to 8 of them in the shadow maps, 1 to 1.5 in
+  the picture itself, and drawing them half as far saved 0.5 ms. `--timing` prints what
+  the GPU spends on every viewport, where it spent the most, and what was drawn; compare with
+  the same pack without its `trees`.
+- **A shadow map takes plain triangles, not cut-outs.** A tree is drawn as cards cut out by
+  their texture; into a shadow map (four cascades, once per viewport: the window and each
+  stereo camera) that costs many times what the same shape costs as triangles. The simulator
+  casts a tree's shadow from the silhouette of its cards, cut into rectangles from the atlas's
+  alpha; the cards cast none. Anything else drawn by the thousand with a cut-out texture gets
+  the same treatment.
+- **Trees are batched by cluster**, 64 m wide, per impostor: what is behind the camera, beyond
+  the draw distance or outside a shadow cascade is not sent to the GPU.
+- **Each kind of thing has a draw distance and fades at its end**, never pops. Trees are drawn
+  up to the pack's `trees.canopy.from_m` and shrink to their foot over its last fifth, into
+  the canopy already standing there: no pixel pattern, which a camera would see as noise.
+  Choose it where a tree is a few pixels wide and woods read as a mass: 600 m on Spa. Open
+  country with lone trees wants more, since a lone tree has no canopy to become.
+- **Beyond it the woods are a canopy**: one coarse surface over the crowns (a vertex every
+  8 m, held up by the trees within 10 m, hanging to the ground at the woods' edge). It must
+  read as many crowns, not as a green mass: its colour is the impostors' crowns' (so no line
+  shows where it takes over), lighter and darker as the orthophoto shows the woods from
+  above, with round crowns lit on their sunny side and shaded gaps between them; each vertex
+  stands up to 2.5 m above or under the surface, so the woods' outline against the sky is
+  jagged. It lies under the ground near the camera and rises among the last trees drawn,
+  before they shrink, so nothing appears at once. It covers the whole track, so the woods
+  beyond the loaded tiles stand on the far terrain. `tools/track_tiles.py` writes it from
+  the trees the tiles list.
+- **Haze is the air, not a curtain.** The pack gives the meteorological visibility
+  (`haze.visibility_m`): how far a black object keeps 2% of its contrast. The fog takes the
+  sky's colour in the direction looked at. A light spring haze is 10 to 20 km; at 16 km
+  something 100 m away keeps 97.6% of its contrast and a hill 1 km away 78%. The cameras feed
+  OVCS's vision: nothing within 100 m may lose more than 5% (visibility under 8 km does).
+  Haze does not hide a draw distance; the canopy does.
+- **Check the stereo cameras' own image** before and after (`--stereo-record`): the road, its
+  lines and the shadows across it must be as they were.
+
 ## Content and licences
 
 - **The simulator ships no content.** Shaders and material logic live in `simulator/`; textures,
@@ -418,6 +457,9 @@ texture.
 - **Look from above too.** A high view over the area shows what the road hides: patches under
   lone trees, smeared photo around buildings and in car parks, roofs that do not match the photo.
 - **Measure the frame time** at 1080p; the budget is 16.7 ms per frame for everything.
+  `--timing` reports the GPU's time over all viewports, the stereo pair included, with the
+  draw calls and primitives; the GPU slows its clock under a frame cap, so compare runs at
+  the same frame rate.
 - **Measure the start and the streaming.** `--timing` prints when the first frame was drawn
   (the budget is 3 s from the process's start) and, every five seconds, the worst frame and
   how many ran over 33 ms. Drive a whole lap with the stereo pair on: tiles enter and leave

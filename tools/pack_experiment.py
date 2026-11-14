@@ -49,10 +49,25 @@ WALLONIA_ATTRIBUTION = [
     "Poly Haven: sky kloofendal_48d_partly_cloudy_puresky, CC0",
     "Poly Haven: models fir_tree_01, pine_tree_01 and jacaranda_tree, drawn as impostors, CC0",
 ]
+# `trees_drawn_m`: how far trees are drawn one by one before the canopy stands for them;
+# further in open country, where a lone tree has no canopy to become. `visibility_m`: how far
+# one sees through the haze.
 CIRCUITS = {
-    "spa": {"name": "Spa-Francorchamps", "build": "Spa"},
-    "mettet": {"name": "Circuit Jules Tacheny, Mettet", "build": "Mettet"},
+    "spa": {
+        "name": "Spa-Francorchamps",
+        "build": "Spa",
+        "trees_drawn_m": 600.0,
+        "visibility_m": 16000.0,
+    },
+    "mettet": {
+        "name": "Circuit Jules Tacheny, Mettet",
+        "build": "Mettet",
+        "trees_drawn_m": 700.0,
+        "visibility_m": 16000.0,
+    },
 }
+# The mean of the tints the simulator gives trees (red, green, blue).
+MEAN_TREE_TINT = (0.95, 0.95, 0.9025)
 # The orthophotos' shadows fall to the north-west.
 SUN = {"azimuth_deg": 45.0, "elevation_deg": 40.0}
 # The ground layers, in the order of ground_classes.LAYERS and SURVEYED_LAYERS: texture set,
@@ -271,6 +286,26 @@ def write_tree_atlases(directory, sources):
     compress_textures([("colour", source, directory / name) for name, source in sources.items()])
 
 
+def crown_colours(impostors, sources):
+    """Return the linear colour of each kind's crowns: its atlases' opaque pixels, tinted."""
+    colours = {}
+    for kind in track_tiles.TREE_KINDS:
+        means = []
+        for impostor in impostors:
+            if impostor["kind"] != kind:
+                continue
+            with Image.open(sources[impostor["atlas"]]) as atlas:
+                pixels = np.asarray(atlas.convert("RGBA"), np.float64) / 255.0
+            opaque = pixels[..., 3] > 0.5
+            means.append((ground_classes.linear(pixels[..., :3])[opaque]).mean(0))
+        if means:
+            colours[kind] = [
+                round(float(level * tint), 4)
+                for level, tint in zip(np.mean(means, 0), MEAN_TREE_TINT, strict=True)
+            ]
+    return colours
+
+
 def tree_instances(trees):
     """Return a circuit's trees by kind, each [x, y, z, height] in the pack's ROS frame.
 
@@ -325,6 +360,7 @@ def circuit_pack(experiment, track_id, circuit, textures):
             "far": {"scene": "far.glb", "photo": "far.jpg"},
             "sky": "sky.hdr",
             "sun": SUN,
+            "haze": {"visibility_m": circuit["visibility_m"]},
             "spawn": {
                 "position_m": ros(start),
                 "yaw_deg": round(math.degrees(math.atan2(heading[0], heading[2])), 2),
@@ -338,16 +374,20 @@ def circuit_pack(experiment, track_id, circuit, textures):
                 "slope_layer": ground_classes.MEADOW,
             },
             "surfaces": surface_rules(),
-            "trees": {"impostors": impostors},
+            "trees": {
+                "impostors": impostors,
+                "canopy": {"scene": "canopy.glb", "from_m": circuit["trees_drawn_m"]},
+            },
         },
     }
     return manifest, links, atlases
 
 
-def write_surfaces(experiment, track_id, circuit, directory, work, manifest):
-    """Write a circuit's tiles, maps and lines; name them and the photo's grade in `manifest`.
+def write_surfaces(experiment, track_id, circuit, directory, work, manifest, crowns):
+    """Write a circuit's tiles, maps, lines and canopy, and name them in `manifest`.
 
-    The whole world the tiles are cut from is written into `work`.
+    So is the photo's grade. The whole world the tiles are cut from is written into `work`;
+    `crowns` is the colour of each kind of tree's crown.
     """
     data = experiment / "data" / track_id
     frame = json.loads((data / "frame.json").read_text())
@@ -425,11 +465,12 @@ def write_surfaces(experiment, track_id, circuit, directory, work, manifest):
         return surveyed.albedo_at(*surveyed.pixel(x, -z))
 
     print(f"{track_id} roofs: {roofs.write_roofs(work / 'world.glb', photo_albedo)}")
+    photo = world_photo(data / "godot" / "world.glb", mosaic)
     homeless = track_tiles.write(
         work / "world.glb",
         directory,
         mosaic,
-        world_photo(data / "godot" / "world.glb", mosaic),
+        photo,
         origin,
         track_surfaces.PACK_TILE_M,
         GROUND_MESH_PREFIXES,
@@ -438,6 +479,10 @@ def write_surfaces(experiment, track_id, circuit, directory, work, manifest):
     )
     tile_count = len(json.loads((directory / "tiles.json").read_text())["tiles"])
     print(f"{track_id}: {tile_count} tiles; {homeless} trees and sign parts stood on none")
+    wooded = track_tiles.write_canopy(
+        directory, mosaic, photo, origin, tree_instances(kept), crowns
+    )
+    print(f"{track_id}: a canopy over {wooded} tiles")
 
 
 def world_photo(world_glb, mosaic):
@@ -625,7 +670,13 @@ def write_circuit(experiment, out, textures, track_id, circuit):
     directory.mkdir(parents=True, exist_ok=True)
     write_tree_atlases(directory, atlases)
     write_surfaces(
-        experiment, track_id, circuit, directory, out.parent / "work" / track_id, manifest
+        experiment,
+        track_id,
+        circuit,
+        directory,
+        out.parent / "work" / track_id,
+        manifest,
+        crown_colours(manifest["track"]["trees"]["impostors"], atlases),
     )
     write_pack(out, manifest, links)
 

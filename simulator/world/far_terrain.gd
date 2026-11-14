@@ -6,6 +6,8 @@ extends Node3D
 const SHADER := preload("res://world/shaders/far.gdshader")
 const MESH_PREFIX := "Far_"
 
+var photo: ImageTexture  ## the whole area from above
+
 var _pieces: Dictionary[String, MeshInstance3D] = {}
 
 
@@ -19,16 +21,17 @@ static func build(track: TrackSpec) -> Dictionary:
 	if photo == null:
 		return {"error": "%s: %s does not load" % [track.id, track.far_photo_path.get_file()]}
 	photo.generate_mipmaps()
+	var far := FarTerrain.new()
+	far.name = "FarTerrain"
+	far.photo = ImageTexture.create_from_image(photo)
 	var material := ShaderMaterial.new()
 	material.shader = SHADER
-	material.set_shader_parameter("photo", ImageTexture.create_from_image(photo))
+	material.set_shader_parameter("photo", far.photo)
 	if track.ground != null:
 		material.set_shader_parameter("photo_black", track.ground.photo_black)
 		material.set_shader_parameter("photo_gain", track.ground.photo_gain)
 		material.set_shader_parameter("photo_gamma", track.ground.photo_gamma)
 		material.set_shader_parameter("photo_saturation", track.ground.photo_saturation)
-	var far := FarTerrain.new()
-	far.name = "FarTerrain"
 	var scene := document.generate_scene(state)
 	for node in scene.find_children(MESH_PREFIX + "*", "MeshInstance3D", true, false):
 		var piece := node as MeshInstance3D

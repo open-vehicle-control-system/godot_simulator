@@ -339,5 +339,124 @@ class WriteTest(unittest.TestCase):
             self.assertEqual(photo.size, (16, 8))
 
 
+class CanopyLatticeTest(unittest.TestCase):
+    """The canopy over trees, on a lattice."""
+
+    def test_a_tree_holds_the_canopy_up_around_its_trunk(self):
+        trees = {"conifer": [[16.0, 16.0, 2.0, 20.0]]}
+
+        top_m, hem_m, colour = track_tiles.canopy_lattice(
+            trees, {"conifer": (0.1, 0.2, 0.05)}, (0.0, 0.0), (5, 5)
+        )
+
+        # Over the trunk, the tree's foot and most of its height, evened with the eight
+        # vertices 8 m and 11.3 m away, of which only the four at 8 m are held up.
+        over_trunk = 2.0 + 20.0 * track_tiles.CANOPY_OVER_TRUNK
+        beside = 2.0 + 20.0 * (0.45 + 0.4 * (1.0 - 0.64))
+        self.assertAlmostEqual(top_m[2, 2], (over_trunk + 4 * beside) / 5.0)
+        self.assertTrue(np.isnan(top_m[0, 0]) and np.isnan(top_m[1, 1]))
+        self.assertAlmostEqual(hem_m[2, 1], 2.0 - track_tiles.CANOPY_HEM_M)
+        # The tree's own shade of its kind's colour.
+        self.assertAlmostEqual(colour[2, 2, 1] / colour[2, 2, 0], 2.0)
+        self.assertTrue(0.1 * 0.82 <= colour[2, 2, 0] <= 0.1 * 1.08)
+
+    def test_the_canopy_is_as_high_as_its_highest_tree_around(self):
+        trees = {"conifer": [[16.0, 16.0, 0.0, 10.0]], "broadleaf": [[16.0, 17.0, 0.0, 30.0]]}
+        colours = {"conifer": (0.1, 0.2, 0.05), "broadleaf": (0.2, 0.2, 0.05)}
+
+        alone, _, _ = track_tiles.canopy_lattice(
+            {"conifer": trees["conifer"]}, colours, (0.0, 0.0), (5, 5)
+        )
+        together, _, colour = track_tiles.canopy_lattice(trees, colours, (0.0, 0.0), (5, 5))
+
+        self.assertGreater(together[2, 2], alone[2, 2] + 10.0)
+        # Both kinds colour it.
+        self.assertTrue(0.5 < colour[2, 2, 0] / colour[2, 2, 1] < 1.0)
+
+
+class WriteCanopyTest(unittest.TestCase):
+    """The canopy of a pack's tiles."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work = tempfile.TemporaryDirectory()
+        cls.directory = Path(cls.work.name)
+        tiles = [
+            {"key": "1000_1984", "corner_m": [0.0, 0.0]},
+            {"key": "1016_1984", "corner_m": [0.0, 16.0]},
+        ]
+        (cls.directory / "tiles.json").write_text(
+            json.dumps({"tile_size_m": TILE_M, "tiles": tiles})
+        )
+        # A wood across the edge of the two tiles, and a tree on no tile.
+        wood = [
+            [4.0 + 4.0 * south, 12.0 + 4.0 * east, 1.0, 12.0]
+            for south in range(3)
+            for east in range(5)
+        ]
+        cls.written = track_tiles.write_canopy(
+            cls.directory,
+            TwoTilePhoto,
+            TwoTilePhoto.rgb,
+            (1000.0, 2000.0),
+            {"conifer": [*wood, [4.0, 90.0, 0.0, 9.0]]},
+            {"conifer": (0.1, 0.2, 0.05)},
+        )
+        cls.gltf, cls.binary = smooth_terrain.read_glb(cls.directory / "canopy.glb")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.work.cleanup()
+
+    def array(self, mesh, attribute):
+        accessor = self.gltf["meshes"][mesh]["primitives"][0]["attributes"][attribute]
+        return smooth_terrain.accessor_array(self.gltf, self.binary, accessor)
+
+    def test_a_tile_with_woods_has_a_canopy_about_its_middle(self):
+        self.assertEqual(self.written, 2)
+        self.assertEqual(
+            [node["name"] for node in self.gltf["nodes"]],
+            ["Canopy_1000_1984", "Canopy_1016_1984"],
+        )
+        middle = self.gltf["nodes"][1]["translation"]
+        self.assertEqual((middle[0], middle[2]), (24.0, 8.0))
+        positions = self.array(1, "POSITION") + middle
+        self.assertGreaterEqual(positions[:, 0].min(), 16.0)
+        self.assertLessEqual(positions[:, 0].max(), 32.0)
+        # Above the crowns' lower edge; a crown may stand out above the trees' tops.
+        self.assertGreater(positions[:, 1].max(), 1.0 + 12.0 * track_tiles.CANOPY_AT_REACH)
+        self.assertLess(positions[:, 1].max(), 13.0 + track_tiles.CANOPY_CROWNS_M)
+
+    def test_the_canopy_hangs_to_its_hem_at_its_edge(self):
+        middle = self.gltf["nodes"][1]["translation"]
+        heights_m = self.array(1, "POSITION")[:, 1] + middle[1]
+        above_hem_m = self.array(1, "TEXCOORD_0")[:, 0]
+
+        self.assertAlmostEqual(heights_m.min(), 1.0 - track_tiles.CANOPY_HEM_M, places=5)
+        np.testing.assert_allclose(heights_m - above_hem_m, 0.0, atol=1e-5)
+
+    def test_the_canopy_crosses_a_tile_edge_without_a_gap(self):
+        first = self.array(0, "POSITION") + self.gltf["nodes"][0]["translation"]
+        second = self.array(1, "POSITION") + self.gltf["nodes"][1]["translation"]
+
+        on_edge = [positions[np.isclose(positions[:, 0], 16.0)] for positions in (first, second)]
+        tops = [set(map(tuple, np.round(positions, 4))) for positions in on_edge]
+        self.assertTrue(tops[0] and tops[0] <= tops[1] | tops[0])
+        self.assertTrue(tops[0] & tops[1])
+
+    def test_the_canopy_lies_under_the_far_terrains_photo(self):
+        positions = self.array(1, "POSITION") + self.gltf["nodes"][1]["translation"]
+        uvs = self.array(1, "TEXCOORD_1")
+
+        np.testing.assert_allclose(uvs[:, 0], positions[:, 0] / 32.0, atol=1e-6)
+        np.testing.assert_allclose(uvs[:, 1], positions[:, 2] / 16.0, atol=1e-6)
+
+    def test_vertices_carry_the_colour_of_the_crowns(self):
+        colours = self.array(1, "COLOR_0")
+
+        np.testing.assert_allclose(colours[:, 1] / colours[:, 0], 2.0, rtol=1e-5)
+        np.testing.assert_allclose(colours[:, 3], 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

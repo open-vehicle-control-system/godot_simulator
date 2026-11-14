@@ -69,7 +69,7 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 	if options.timing:
 		var frame_times := FrameTimes.new()
 		add_child(frame_times)
-		frame_times.setup(tiles)
+		frame_times.setup(tiles, vehicle)
 	var stereo := StereoCamera.new()
 	add_child(stereo)
 	stereo.setup(vehicle, spec.stereo)

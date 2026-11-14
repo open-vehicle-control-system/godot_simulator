@@ -11,7 +11,9 @@ holding the centre of its bounds. Per tile, as docs/pack_format.md describes the
 - `<key>.json`: the trees, posts, plates and signals standing on it.
 
 `tiles.json` lists the tiles; `far.glb` and `far.jpg` are the whole area, coarse, a mesh per
-tile, drawn where a tile is not loaded.
+tile, drawn where a tile is not loaded. `canopy.glb` is the woods as one coarse surface over
+the trees' crowns, a mesh per tile under the far terrain's photo, drawn where the trees are too
+far to be drawn one by one.
 
 Needs numpy and Pillow.
 """
@@ -40,6 +42,19 @@ FAR_MATERIAL = {
     "name": "M_Far",
     "pbrMetallicRoughness": {"metallicFactor": 0, "roughnessFactor": 0.9},
 }
+CANOPY_MATERIAL = {
+    "name": "M_Canopy",
+    "doubleSided": True,
+    "pbrMetallicRoughness": {"metallicFactor": 0, "roughnessFactor": 1.0},
+}
+CANOPY_STEP_M = 8.0
+CANOPY_REACH_M = 10.0  # how far around its trunk a tree holds the canopy up
+CANOPY_OVER_TRUNK = 0.85  # of a tree's height: the canopy over its trunk
+CANOPY_AT_REACH = 0.45  # and CANOPY_REACH_M from it
+CANOPY_HEM_M = 1.0  # how far under the lowest foot around the canopy's edge hangs
+CANOPY_CROWNS_M = 2.5  # how far a vertex stands above or under the canopy, as a crown or a gap
+CANOPY_SHADES = (0.82, 1.08)  # a tree's own brightness, as the simulator draws trees
+CANOPY_SEED = 7
 TREE_KINDS = ("conifer", "broadleaf")
 SIGN_KINDS = ("posts", "plates", "signals")
 GLTF_TYPES = {1: "SCALAR", 2: "VEC2", 3: "VEC3", 4: "VEC4"}
@@ -236,8 +251,11 @@ class Glb:
         self.gltf["accessors"].append(accessor)
         return len(self.gltf["accessors"]) - 1
 
-    def add_mesh(self, name, primitives):
-        """Add a mesh and its node; a primitive is (attributes by name, indices, material)."""
+    def add_mesh(self, name, primitives, translation=None):
+        """Add a mesh and its node; a primitive is (attributes by name, indices, material).
+
+        The node stands at `translation`, the origin without one.
+        """
         written = []
         for attributes, indices, material in primitives:
             written.append(
@@ -253,7 +271,10 @@ class Glb:
                 }
             )
         self.gltf["meshes"].append({"name": name, "primitives": written})
-        self.gltf["nodes"].append({"name": name, "mesh": len(self.gltf["meshes"]) - 1})
+        node = {"name": name, "mesh": len(self.gltf["meshes"]) - 1}
+        if translation is not None:
+            node["translation"] = [float(along) for along in translation]
+        self.gltf["nodes"].append(node)
         self.gltf["scenes"][0]["nodes"].append(len(self.gltf["nodes"]) - 1)
 
     def write(self, path):
@@ -477,12 +498,8 @@ def far_mesh(measured_m, filled_m, corner_m, tile_m, photo_uv):
     return attributes, indices.astype(np.uint32), FAR_MATERIAL
 
 
-def write_far(directory, grid, heights, mosaic, photo_rgb):
-    """Write far.glb (a `Far_<key>` mesh per tile) and far.jpg, the whole photo, coarse.
-
-    `heights` is `{cell: (measured, filled)}` as `write_tile` returns them; `photo_rgb`
-    covers the ground `mosaic` does.
-    """
+def _photo_uv(grid, mosaic, photo_rgb):
+    """Return the function giving a point's UV across the far terrain's photo, from (x, z)."""
     width_m = photo_rgb.shape[1] / mosaic.px_per_m
     height_m = photo_rgb.shape[0] / mosaic.px_per_m
     west_x_m = mosaic.west - grid.origin_m[0]
@@ -491,6 +508,18 @@ def write_far(directory, grid, heights, mosaic, photo_rgb):
     def photo_uv(x_m, z_m):
         return np.stack([(x_m - west_x_m) / width_m, (z_m - north_z_m) / height_m], -1)
 
+    return photo_uv
+
+
+def write_far(directory, grid, heights, mosaic, photo_rgb):
+    """Write far.glb (a `Far_<key>` mesh per tile) and far.jpg, the whole photo, coarse.
+
+    `heights` is `{cell: (measured, filled)}` as `write_tile` returns them; `photo_rgb`
+    covers the ground `mosaic` does.
+    """
+    width_m = photo_rgb.shape[1] / mosaic.px_per_m
+    height_m = photo_rgb.shape[0] / mosaic.px_per_m
+    photo_uv = _photo_uv(grid, mosaic, photo_rgb)
     glb = Glb()
     for cell, (measured_m, filled_m) in sorted(heights.items()):
         mesh = far_mesh(measured_m, filled_m, grid.corner(cell), grid.tile_m, photo_uv)
@@ -502,6 +531,210 @@ def write_far(directory, grid, heights, mosaic, photo_rgb):
         Image.Resampling.BOX,
     )
     photo.save(directory / "far.jpg", quality=PHOTO_JPEG_QUALITY, subsampling=0)
+
+
+# ----------------------------------------------------------------------------------- canopy
+def canopy_lattice(trees, colours, corner_m, shape):
+    """Return the canopy over `trees` on a lattice: its height, its hem and its colour.
+
+    The lattice has `shape` (rows south, columns east) vertices every CANOPY_STEP_M from
+    `corner_m`, Godot's (x, z). A tree `[x, y, z, height]` of the pack's ROS frame holds the
+    canopy up within CANOPY_REACH_M of its trunk, highest over it; the heights are evened
+    out, as crowns side by side are, and NaN where no tree reaches. The hem is under the
+    lowest foot around; the colour blends `colours`, the linear colour of each kind's crowns,
+    shaded tree by tree.
+    """
+    top_m = np.full(shape, np.nan)
+    hem_m = np.full(shape, np.inf)
+    colour = np.zeros((*shape, 3))
+    weight = np.zeros(shape)
+    random = np.random.default_rng(CANOPY_SEED)
+    reach = int(np.ceil(CANOPY_REACH_M / CANOPY_STEP_M))
+    for kind in TREE_KINDS:
+        standing = np.array(trees.get(kind, []), np.float64).reshape(-1, 4)
+        if not len(standing):
+            continue
+        x_m, foot_m, z_m, height_m = standing[:, 1], standing[:, 2], standing[:, 0], standing[:, 3]
+        shade = random.uniform(*CANOPY_SHADES, len(standing))
+        column = np.rint((x_m - corner_m[0]) / CANOPY_STEP_M).astype(int)
+        row = np.rint((z_m - corner_m[1]) / CANOPY_STEP_M).astype(int)
+        for row_step in range(-reach, reach + 1):
+            for column_step in range(-reach, reach + 1):
+                rows, columns = row + row_step, column + column_step
+                away_m = np.hypot(
+                    corner_m[0] + columns * CANOPY_STEP_M - x_m,
+                    corner_m[1] + rows * CANOPY_STEP_M - z_m,
+                )
+                held = (
+                    (away_m < CANOPY_REACH_M)
+                    & (rows >= 0)
+                    & (rows < shape[0])
+                    & (columns >= 0)
+                    & (columns < shape[1])
+                )
+                at = (rows[held], columns[held])
+                nearness = 1.0 - (away_m[held] / CANOPY_REACH_M) ** 2
+                crown = CANOPY_AT_REACH + (CANOPY_OVER_TRUNK - CANOPY_AT_REACH) * nearness
+                np.fmax.at(top_m, at, foot_m[held] + height_m[held] * crown)
+                np.minimum.at(hem_m, at, foot_m[held] - CANOPY_HEM_M)
+                np.add.at(weight, at, nearness)
+                np.add.at(colour, at, (nearness * shade[held])[:, None] * np.asarray(colours[kind]))
+    return _evened(top_m), hem_m, colour / np.maximum(weight, 1e-9)[..., None]
+
+
+def _evened(top_m):
+    """Return the canopy's heights, each averaged with those around it that have one."""
+    held = ~np.isnan(top_m)
+    total = np.pad(np.where(held, top_m, 0.0), 1)
+    count = np.pad(held.astype(np.float64), 1)
+    rows, columns = top_m.shape
+    around = [(row, column) for row in range(3) for column in range(3)]
+    summed = sum(total[row : row + rows, column : column + columns] for row, column in around)
+    counted = sum(count[row : row + rows, column : column + columns] for row, column in around)
+    return np.where(held, summed / np.maximum(counted, 1.0), np.nan)
+
+
+def canopy_mesh(top_m, hem_m, colour, normal, drawn, edges, corner_m, centre_m, photo_uv):
+    """Return a tile's canopy as a primitive about `centre_m`, or None without any.
+
+    `top_m`, `hem_m`, `colour` and `normal` are the tile's part of the lattice, from
+    `corner_m`; `photo_uv(x, z)` gives UV 1, across the far terrain's photo;
+    `drawn` tells which of its squares the canopy covers, and `edges` which of each drawn
+    square's sides (north, south, west, east) are the canopy's edge, where it hangs to its hem.
+    UV 0 carries how far above its hem a vertex is, so the simulator can lay the canopy down.
+    """
+    if not drawn.any():
+        return None
+    count_z, count_x = top_m.shape
+    grid_x_m, grid_z_m = np.meshgrid(
+        corner_m[0] + CANOPY_STEP_M * np.arange(count_x),
+        corner_m[1] + CANOPY_STEP_M * np.arange(count_z),
+    )
+    filled_m = np.where(np.isnan(top_m), np.where(np.isinf(hem_m), 0.0, hem_m), top_m)
+    positions = np.stack([grid_x_m, filled_m, grid_z_m], -1).reshape(-1, 3)
+    normals = normal.reshape(-1, 3)
+    colours = colour.reshape(-1, 3)
+    hems_m = np.where(np.isinf(hem_m), 0.0, hem_m).reshape(-1)
+    vertex = np.arange(count_z * count_x).reshape(count_z, count_x)
+    north_west, north_east = vertex[:-1, :-1][drawn], vertex[:-1, 1:][drawn]
+    south_west, south_east = vertex[1:, :-1][drawn], vertex[1:, 1:][drawn]
+    triangles = [
+        np.stack([north_west, south_west, north_east], -1),
+        np.stack([north_east, south_west, south_east], -1),
+    ]
+    sides = (
+        (north_east, north_west, (0.0, 0.0, -1.0)),
+        (south_west, south_east, (0.0, 0.0, 1.0)),
+        (north_west, south_west, (-1.0, 0.0, 0.0)),
+        (south_east, north_east, (1.0, 0.0, 0.0)),
+    )
+    for side, (first, second, outwards) in enumerate(sides):
+        on_edge = edges[side][drawn]
+        ends = np.concatenate([first[on_edge], second[on_edge]])
+        if not len(ends):
+            continue
+        count = len(ends) // 2
+        base = len(positions)
+        hem = positions[ends].copy()
+        hem[:, 1] = hems_m[ends]
+        positions = np.concatenate([positions, positions[ends], hem])
+        hems_m = np.concatenate([hems_m, hems_m[ends], hems_m[ends]])
+        normals = np.concatenate([normals, np.tile(outwards, (4 * count, 1))])
+        colours = np.concatenate([colours, colours[ends], colours[ends]])
+        high_first, high_second = base + np.arange(count), base + count + np.arange(count)
+        low_first, low_second = high_first + 2 * count, high_second + 2 * count
+        triangles.append(np.stack([high_first, low_first, high_second], -1))
+        triangles.append(np.stack([high_second, low_first, low_second], -1))
+    indices = np.concatenate(triangles)
+    used, indices = np.unique(indices, return_inverse=True)
+    above_hem_m = positions[:, 1] - hems_m
+    attributes = {
+        "POSITION": positions[used] - np.asarray(centre_m),
+        "NORMAL": normals[used],
+        "TEXCOORD_0": np.stack([above_hem_m[used], np.zeros(len(used))], -1),
+        "TEXCOORD_1": photo_uv(positions[used, 0], positions[used, 2]),
+        "COLOR_0": np.concatenate([colours[used], np.ones((len(used), 1))], -1),
+    }
+    return attributes, indices.reshape(-1, 3).astype(np.uint32), CANOPY_MATERIAL
+
+
+def write_canopy(directory, mosaic, photo_rgb, origin_m, trees, colours):
+    """Write canopy.glb, a `Canopy_<key>` mesh per tile of `directory` with woods on it.
+
+    `trees` are the pack's by kind, in its ROS frame, and `colours` the linear colour of each
+    kind's crowns; `mosaic`, `photo_rgb` and `origin_m` are those the tiles and the far
+    terrain were written with. Every vertex stands a little above or under the canopy, a
+    crown or a gap, and keeps the canopy's own normal. Each mesh's node stands at the middle
+    of its canopy. Returns how many tiles have a canopy.
+    """
+    index = json.loads((directory / "tiles.json").read_text())
+    tile_m = index["tile_size_m"]
+    grid = TileGrid(mosaic.west - origin_m[0], -(mosaic.north - origin_m[1]), tile_m, origin_m)
+    per_tile = round(tile_m / CANOPY_STEP_M)
+    cells = {}
+    for entry in index["tiles"]:
+        column, row = grid.cells(
+            entry["corner_m"][1] + 0.5 * tile_m, entry["corner_m"][0] + 0.5 * tile_m
+        )
+        cells[(int(column), int(row))] = entry["key"]
+    columns = [cell[0] for cell in cells]
+    rows = [cell[1] for cell in cells]
+    first = (min(columns), min(rows))
+    corner_m = grid.corner(first)
+    shape = (
+        (max(rows) - first[1] + 1) * per_tile + 1,
+        (max(columns) - first[0] + 1) * per_tile + 1,
+    )
+    on_a_tile = {
+        kind: [
+            tree
+            for tree in trees.get(kind, [])
+            if tuple(int(at) for at in grid.cells(tree[1], tree[0])) in cells
+        ]
+        for kind in TREE_KINDS
+    }
+    top_m, hem_m, colour = canopy_lattice(on_a_tile, colours, corner_m, shape)
+    held = ~np.isnan(top_m)
+    normal = smooth_terrain.lattice_normals(
+        np.where(held, top_m, np.where(np.isinf(hem_m), 0.0, hem_m)), CANOPY_STEP_M
+    )
+    crowns = np.random.default_rng(CANOPY_SEED).uniform(-CANOPY_CROWNS_M, CANOPY_CROWNS_M, shape)
+    top_m = np.maximum(top_m + crowns, hem_m + CANOPY_HEM_M)
+    photo_uv = _photo_uv(grid, mosaic, photo_rgb)
+    drawn = held[:-1, :-1] & held[:-1, 1:] & held[1:, :-1] & held[1:, 1:]
+    bare = np.pad(~drawn, 1, constant_values=True)
+    edges = (bare[:-2, 1:-1], bare[2:, 1:-1], bare[1:-1, :-2], bare[1:-1, 2:])
+    glb = Glb()
+    written = 0
+    for cell, key in sorted(cells.items()):
+        row = (cell[1] - first[1]) * per_tile
+        column = (cell[0] - first[0]) * per_tile
+        vertices = (slice(row, row + per_tile + 1), slice(column, column + per_tile + 1))
+        squares = (slice(row, row + per_tile), slice(column, column + per_tile))
+        tile_corner_m = grid.corner(cell)
+        tops = top_m[vertices]
+        if not drawn[squares].any():
+            continue
+        centre_m = (
+            tile_corner_m[0] + 0.5 * tile_m,
+            float(np.nanmean(tops)),
+            tile_corner_m[1] + 0.5 * tile_m,
+        )
+        mesh = canopy_mesh(
+            tops,
+            hem_m[vertices],
+            colour[vertices],
+            normal[vertices],
+            drawn[squares],
+            [edge[squares] for edge in edges],
+            tile_corner_m,
+            centre_m,
+            photo_uv,
+        )
+        glb.add_mesh(f"Canopy_{key}", [mesh], centre_m)
+        written += 1
+    glb.write(directory / "canopy.glb")
+    return written
 
 
 # ------------------------------------------------------------------------------------ whole

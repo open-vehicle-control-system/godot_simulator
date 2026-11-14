@@ -65,6 +65,12 @@ static func create(track: TrackSpec) -> Dictionary:
 			return {"error": far_found["error"]}
 		world._far = far_found["far"]
 		world.add_child(world._far)
+	if track.trees != null and track.trees.canopy_scene_path != "":
+		var canopy_found := Canopy.build(track, world._far.photo)
+		if canopy_found.has("error"):
+			world.free()
+			return {"error": "%s: %s" % [track.id, canopy_found["error"]]}
+		world.add_child(canopy_found["canopy"])
 	return {"tiles": world}
 
 

@@ -29,7 +29,7 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `vehicle/instrument_scales.gd` | Needle and steering wheel angles from the pack's scales. Pure |
 | `vehicle/instruments.gd` | Turns the cockpit's needles and steering wheel as the vehicle moves |
 | `vehicle/mirrors.gd`, `vehicle/mirror.gdshader` | The mirrors: a view looking back per piece of mirror glass |
-| `world/track_world.gd` | The track's world around its spawn, and its lighting and atmosphere |
+| `world/track_world.gd` | The track's world around its spawn, and its lighting and haze |
 | `packs/tiles_spec.gd` | A track's tiles, validated |
 | `world/track_tiles.gd`, `world/tile_ring.gd` | The world, streamed: which tiles are loaded, collide and are freed as the vehicle moves |
 | `world/tile_loader.gd`, `world/tile_content.gd` | A tile read from its files on a worker thread, then built into a scene on the main thread |
@@ -37,12 +37,13 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `world/far_terrain.gd` | The coarse terrain shown where a tile is not loaded |
 | `packs/surface_rule.gd`, `packs/ground_spec.gd`, `packs/trees_spec.gd`, `packs/signs_spec.gd` | A track's surfaces, ground layers, trees and signs, validated |
 | `world/surface_materials.gd`, `world/shaders/` | The simulator's surfaces: materials built from the pack's textures and maps |
-| `world/forest.gd`, `world/tree_trunks.gd` | A tile's trees as impostors; their trunks as collision in one physics body |
+| `world/forest.gd`, `world/tree_trunks.gd` | A tile's trees as impostors, batched by cluster, and the silhouettes casting their shadows; their trunks as collision in one physics body |
+| `world/canopy.gd` | The woods as one coarse surface, drawn where the trees are too far to be drawn one by one |
 | `world/road_signs.gd`, `world/post_bodies.gd` | A tile's road signs and signals: a batch per sign face, one of posts, one of signal heads; its posts as collision in one physics body |
-| `world/instance_batch.gd` | Copies of one mesh, filled on any thread and drawn together |
+| `world/instance_batch.gd` | Copies of one mesh about a centre, filled on any thread, drawn and culled together |
 | `world/sky_sun.gd` | Finds the sun in a panorama. Pure |
 | `view/screenshot.gd` | Saves the window and reports what the window and the other viewports cost to render |
-| `view/frame_times.gd` | Reports when the first frame was drawn and the worst frame times after it (`--timing`) |
+| `view/frame_times.gd` | Reports when the first frame was drawn, the worst frame times after it, the GPU's time over all viewports and what was drawn (`--timing`) |
 | `link/link_protocol.gd` | The link's packets and the Godot ↔ ROS frames. Pure |
 | `link/simulator_link.gd` | The link's TCP client |
 | `sensors/stereo_camera.gd` | The stereo pair's cameras and intrinsics |
@@ -101,7 +102,28 @@ near the vehicle, so a track of any size starts in about a second and costs the 
   thousand made one a frame once the tile is in the scene, ahead of the vehicle's coming.
 
 `--timing` prints when the first frame was drawn and, every five seconds, the worst frame and
-how many ran over 33 ms.
+how many ran over 33 ms, what the GPU spent on all viewports (the window, the stereo pair, the
+mirrors) with where the vehicle was when it spent the most, and the draw calls, objects and
+primitives of a frame.
+
+## Trees from near to far
+
+Every viewport renders its own shadow maps, so what casts a shadow is drawn four times more
+per viewport; with the stereo pair that is three viewports.
+
+- **Near**, a tree is crossed cards cut out by its impostor's atlas, in a batch per impostor
+  and 64 m cluster, so batches behind the camera or out of range are culled.
+- **Its shadow** is cast by another batch of the same cluster: the cards' silhouette as
+  rectangles of plain triangles, made once per impostor from a small mipmap of the atlas's
+  alpha, drawn only into the shadow maps and only within the sun's shadow distance. The cards
+  themselves cast nothing.
+- **Towards the pack's draw distance** each tree shrinks to its foot, by its own distance to
+  the camera; its cluster is culled once all of it is gone.
+- **Beyond**, the canopy stands for the woods: one coarse surface per tile, of the whole
+  track, loaded once at start, shaded by the far terrain's photo and drawn with round crowns.
+  Near the camera it lies under the ground; it rises to the crowns over the distance before
+  the trees start to shrink.
+- **Haze** is exponential fog in the sky's colour, its density from the pack's visibility.
 
 ## The cockpit
 

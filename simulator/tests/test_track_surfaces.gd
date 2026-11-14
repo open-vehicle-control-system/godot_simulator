@@ -242,8 +242,11 @@ func test_plants_the_trees_of_the_pack() -> void:
 
 	var loaded := TrackWorld.load_world(track)
 
-	var batch: MultiMeshInstance3D = loaded["world"].get_node("Tile_a/Trees 0")
-	assert_eq(batch.multimesh.instance_count, 2)
+	var east: MultiMeshInstance3D = loaded["world"].get_node("Tile_a/Trees 0 at 0 0")
+	var west: MultiMeshInstance3D = loaded["world"].get_node("Tile_a/Trees 0 at -1 0")
+	assert_eq(east.multimesh.instance_count, 1)
+	assert_eq(west.multimesh.instance_count, 1)
+	assert_almost_eq(east.position, Vector3(32.0, 1.0, 32.0))
 	assert_almost_eq(Forest.standing_at(standing["conifer"][0]), Vector3(2.0, 1.0, 5.0))
 	loaded["world"].free()
 

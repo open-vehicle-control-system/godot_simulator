@@ -1,14 +1,19 @@
 // A tree impostor: views of a tree around its trunk, side by side in an atlas, on crossed
-// cards. The instance colour tints the tree.
+// cards. The instance colour tints the tree. Towards the end of its draw distance a tree
+// shrinks to its foot, into the canopy that stands for it from there on.
 shader_type spatial;
 render_mode cull_disabled, depth_draw_opaque;
 
 uniform sampler2D atlas : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
+uniform float fades_from_m = 1e9;
+uniform float gone_at_m = 2e9;
 
 varying vec3 tint;
 
 void vertex() {
 	tint = COLOR.rgb;
+	vec3 foot = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+	VERTEX *= 1.0 - smoothstep(fades_from_m, gone_at_m, distance(foot, CAMERA_POSITION_WORLD));
 }
 
 void fragment() {

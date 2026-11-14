@@ -276,6 +276,15 @@ static func write_far_terrain(pack_directory: String, keys: Array) -> void:
 	photo.save_jpg(pack_directory.path_join("far.jpg"))
 
 
+static func write_canopy(pack_directory: String, middles: Array) -> void:
+	## canopy.glb with a flat mesh 2 m wide, `Canopy_<number>`, at each of `middles`.
+	var root := Node3D.new()
+	root.name = "Canopy"
+	for number in middles.size():
+		_add_mesh(root, "Canopy_%d" % number, PlaneMesh.new(), middles[number])
+	_write_gltf(root, pack_directory.path_join("canopy.glb"))
+
+
 static func write_tile_objects(pack_directory: String, key: String, standing: Dictionary) -> void:
 	## A tile's `<key>.json`: `standing` with what it leaves out of trees, posts, plates and
 	## signals listed empty.

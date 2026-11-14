@@ -12,7 +12,10 @@ const SKY_ENERGY := 1.0
 const AMBIENT_ENERGY := 1.0
 const EXPOSURE := 0.85
 const WHITE := 6.0
-const FOG_DENSITY_PER_M := 0.00018
+## A track that tells no visibility has the air of a clear day.
+const DEFAULT_VISIBILITY_M := 20000.0
+## Koschmieder: the visibility is how far a black object keeps 2% of its contrast.
+const VISIBILITY_CONTRAST := 0.02
 const SSAO_RADIUS_M := 1.2
 const SSAO_INTENSITY := 2.2
 const GLOW_INTENSITY := 0.25
@@ -83,10 +86,17 @@ static func lighting_under(track: TrackSpec, sky_read: Dictionary) -> Dictionary
 	lit.glow_intensity = GLOW_INTENSITY
 	lit.glow_hdr_threshold = GLOW_THRESHOLD
 	lit.fog_enabled = true
-	lit.fog_density = FOG_DENSITY_PER_M
+	lit.fog_density = haze_density_per_m(
+		track.visibility_m if track.visibility_m > 0.0 else DEFAULT_VISIBILITY_M
+	)
 	lit.fog_aerial_perspective = 1.0
 	lit.fog_sky_affect = 0.0
 	return {"environment": lit, "sun": _sun(sun_direction)}
+
+
+static func haze_density_per_m(visibility_m: float) -> float:
+	## The share of light the haze takes per metre when one sees `visibility_m` far.
+	return -log(VISIBILITY_CONTRAST) / visibility_m
 
 
 static func _sun(towards_sun: Vector3) -> DirectionalLight3D:

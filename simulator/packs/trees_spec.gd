@@ -15,6 +15,9 @@ class Impostor:
 
 
 var impostors: Array[Impostor] = []
+var canopy_scene_path := ""  ## the woods as one coarse surface, or "" without one
+## How far a tree is drawn before the canopy stands for it; 0 without a canopy: any distance.
+var draw_distance_m := 0.0
 
 
 static func parse(reader: ManifestReader, directory: String) -> TreesSpec:
@@ -32,4 +35,7 @@ static func parse(reader: ManifestReader, directory: String) -> TreesSpec:
 		if reader.error == "":
 			reader.error = impostor_reader.error
 		trees.impostors.append(impostor)
+	if reader.has("trees.canopy"):
+		trees.canopy_scene_path = reader.file("trees.canopy.scene", directory)
+		trees.draw_distance_m = reader.positive("trees.canopy.from_m")
 	return trees

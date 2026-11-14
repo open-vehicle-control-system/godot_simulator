@@ -112,6 +112,7 @@ for a vehicle; x, y, z up for a world.
   "far": {"scene": "far.glb", "photo": "far.jpg"},
   "sky": "sky.hdr",
   "sun": {"azimuth_deg": 45.0, "elevation_deg": 40.0},
+  "haze": {"visibility_m": 16000.0},
   "spawn": {"position_m": [196.92, -127.35, 21.32], "yaw_deg": -71.0},
   "ground": {...},
   "surfaces": [...],
@@ -131,6 +132,9 @@ for a vehicle; x, y, z up for a world.
   (as a yaw) and `elevation_deg` above the horizon. The sky is turned about the vertical so its
   brightest spot is at that azimuth. Without `sun` the light comes from the sky's brightest
   spot.
+- `haze` is optional: `visibility_m` is how far one sees through the air, the distance at
+  which a black object keeps 2% of its contrast against the sky. Without it the air is a
+  clear day's, 20 km.
 - `spawn` is where the vehicle starts, yaw counter-clockwise from x seen from above.
 - `ground`, `surfaces`, `trees` and `signs` are optional: see [Surfaces](#surfaces),
   [Trees](#trees) and [Signs and signals](#signs-and-signals).
@@ -336,14 +340,24 @@ long every 75 cm, pointing at the traffic that gives way), as worn white paint.
 "trees": {
   "impostors": [
     {"atlas": "trees/fir.dds", "views": 3, "width_m": 7.8, "height_m": 18.9, "kind": "conifer"}
-  ]
+  ],
+  "canopy": {"scene": "canopy.glb", "from_m": 600.0}
 }
 ```
 
 - The trees stand where the tiles list them ([Tiles](#tiles)); every trunk collides.
 - An impostor's `atlas` is a DDS texture with alpha of the tree seen from `views` directions evenly spread
   over half a turn, side by side; `width_m` and `height_m` are one view's. Each tree is drawn
-  with an impostor of its kind, scaled to its height.
+  with an impostor of its kind, scaled to its height. Its shadow is cast by the atlas's
+  silhouette, where its alpha is over 0.45.
+- `canopy` is optional, for a track with `far`: the woods as one coarse surface over the
+  crowns, drawn where the trees are further than `from_m` from the camera, loaded tile or
+  not. The trees shrink away over the last fifth of `from_m`; the canopy rises from the
+  ground over the fifth before. Without `canopy` a tree is drawn wherever its tile is loaded.
+  `scene` holds meshes named `Canopy_<key>`, each node at the middle of its mesh, with a
+  linear vertex colour (the crowns'), UV 1 across `far.photo` and, as UV 0's first
+  coordinate, how many metres the vertex stands above the canopy's hem, where it lies when
+  near the camera: under the ground.
 
 ### Signs and signals
 
