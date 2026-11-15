@@ -1,7 +1,7 @@
 class_name Powertrain
 extends RefCounted
 ## What a vehicle's powertrain does at a speed: the force its motor gives the road through the
-## gear in use, what rolling and the air take back, and how fast the motor turns. Pure.
+## gear in use, and what rolling and the air take back. Pure.
 ##
 ## The motor gives its full torque up to the speed where its power takes over, then its power,
 ## up to its rpm limit and nothing past it. The driven axle passes on at most its grip
@@ -40,12 +40,6 @@ static func gear_at(spec: VehicleSpec, speed_m_s: float) -> int:
 			best_gear = gear
 			best_force_n = maxf(force_n, best_force_n)
 	return best_gear
-
-
-static func motor_rpm(spec: VehicleSpec, speed_m_s: float) -> float:
-	## The motor's speed when the wheels roll at `speed_m_s`, either way, in the gear in use.
-	var ratio := overall_ratio(spec.powertrain, gear_at(spec, speed_m_s))
-	return InstrumentScales.motor_rpm(speed_m_s, spec.wheel_radius_m, ratio)
 
 
 static func motor_force_n(spec: VehicleSpec, gear: int, speed_m_s: float) -> float:

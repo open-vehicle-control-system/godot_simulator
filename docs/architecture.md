@@ -12,6 +12,7 @@ track pack's world and sends back what the vehicle senses there.
 OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TCP── simulator
                                           ◄── state, stereo images ──┘
                                           drive (speed, steering) ──►
+                                          instruments (motor rpm) ──►
 ```
 
 ## Parts
@@ -28,10 +29,10 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `vehicle/dynamic_bicycle.gd` | The dynamic bicycle model: tyres that slip. Pure |
 | `vehicle/bicycle_model.gd` | The kinematic bicycle model, the slow limit of the dynamic one. Pure |
 | `vehicle/vehicle.gd` | The vehicle: follows the commanded speed and steering on the ground, keeps an odometer, reports its motion |
-| `vehicle/powertrain.gd` | The force the motor gives through the gear in use, drag and rolling resistance, the motor's speed. Pure |
+| `vehicle/powertrain.gd` | The force the motor gives through the gear in use, drag and rolling resistance. Pure |
 | `vehicle/keyboard_drive.gd`, `vehicle/keyboard_driver.gd` | Speed and steering from the arrow keys under `--keyboard` (pure), and the node that reads the keys |
 | `vehicle/instrument_scales.gd` | Needle and steering wheel angles from the pack's scales. Pure |
-| `vehicle/instruments.gd` | Turns the cockpit's needles and steering wheel as the vehicle moves |
+| `vehicle/instruments.gd` | Turns the cockpit's needles and steering wheel as the vehicle moves, the rev counter to the motor rpm OVCS reports |
 | `vehicle/mirrors.gd`, `vehicle/mirror.gdshader` | The mirrors: a view looking back per piece of mirror glass |
 | `world/track_world.gd` | The track's world around its spawn, and its lighting and haze |
 | `packs/tiles_spec.gd` | A track's tiles, validated |
@@ -147,11 +148,9 @@ stays whatever the speed; `"automatic"` takes the gear that pushes hardest at th
 highest of those that push as hard. There is no clutch, no shift time and no torque curve but
 the flat torque and power.
 
-Under OVCS the speed is OVCS's: the powertrain only shapes keyboard driving and the rev counter.
-OVCS's own simulated hardware has its own motor-to-wheel ratio (for OVCS1,
-`Ovcs1.Simulation` in the OVCS repository); it must match the selected gear's overall ratio
-(gear × final drive), or the cockpit's rev counter and the speed OVCS measures from the motor
-disagree with each other.
+Under OVCS the speed is OVCS's: the powertrain only shapes keyboard driving. OVCS's own
+simulated hardware has its own motor-to-wheel ratio (for OVCS1, `Ovcs1.Simulation` in the OVCS
+repository), which gives the rpm the rev counter shows.
 
 ## Physics
 
@@ -288,9 +287,9 @@ same view do, by 1/255 in a few hundred pixels of the trees' cards.
 What moves in the cockpit comes from the vehicle pack ([Pack format](./pack_format.md#vehicle-packs)):
 which nodes of the model are the needles and the steering wheel, their axes and scales, and
 which material is mirror glass. They show the vehicle's own state (its speed and steering), so
-they read the same driven by OVCS, by the keys or by `--hold`; the rev counter shows the motor
-speed that the wheels' speed implies through the gear in use and the final drive of the pack's
-`powertrain`.
+they read the same driven by OVCS, by the keys or by `--hold`. The rev counter shows the motor
+rpm OVCS reports over the link (`instruments`), and rests at 0 when none has come for 0.5 s:
+under `--keyboard`, `--hold` or a vehicle whose simulated hardware reports no rpm.
 
 Each mirror is a small view of the world from its glass, looking back. They are rendered only
 in the cockpit view, lit as the world without tone mapping, glow or ambient occlusion, which

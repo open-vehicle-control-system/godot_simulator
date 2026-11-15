@@ -1,7 +1,6 @@
 extends TestCase
 ## A vehicle's powertrain: as its pack describes it, the force its motor gives through the
-## selected gear, what the road and the air take back, and the motor's speed the rev counter
-## shows.
+## selected gear and what the road and the air take back.
 
 const GRAVITY_M_S2 := 9.81
 
@@ -42,17 +41,6 @@ func test_a_selected_gear_stays_whatever_the_speed() -> void:
 
 	assert_eq(Powertrain.gear_at(spec, 0.0), 2)
 	assert_eq(Powertrain.gear_at(spec, 60.0), 2)
-
-
-func test_the_motor_turns_at_the_wheels_speed_through_the_gear_in_use() -> void:
-	var spec := _spec()
-	var cases := {1: 8.0, 2: 4.0}
-	for gear in cases:
-		spec.powertrain.gear = gear
-
-		var rpm := Powertrain.motor_rpm(spec, -10.0)
-
-		assert_almost_eq(rpm, 10.0 / (TAU * 0.3) * 60.0 * cases[gear], 1e-3, str(gear))
 
 
 func test_drag_and_rolling_resistance_hold_the_vehicle_back() -> void:

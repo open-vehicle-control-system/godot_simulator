@@ -111,7 +111,8 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 	if spec.instruments != null:
 		var instruments := Instruments.new()
 		add_child(instruments)
-		var problem := instruments.setup(vehicle, model.cockpit_parts)
+		var reported_motor_rpm := link.motor_rpm if link != null else Callable()
+		var problem := instruments.setup(vehicle, model.cockpit_parts, reported_motor_rpm)
 		if problem != "":
 			return problem
 	if spec.mirrors != null:

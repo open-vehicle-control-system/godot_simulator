@@ -1,8 +1,8 @@
 class_name Instruments
 extends Node
 ## The cockpit's moving parts: the speedometer and rev counter needles and the steering wheel,
-## each turned about its own pivot to show the vehicle's speed, its motor's speed in the gear in
-## use (Powertrain) and its steering, by the scales of the vehicle pack's `instruments`
+## each turned about its own pivot to show the vehicle's speed, the motor's speed OVCS reports
+## (0 when it reports none) and the steering, by the scales of the vehicle pack's `instruments`
 ## (InstrumentScales).
 
 const KM_H_PER_M_S := 3.6
@@ -23,12 +23,17 @@ var _vehicle: Vehicle
 var _speedometer_needle: Part = null
 var _rev_counter_needle: Part = null
 var _steering_wheel: Part = null
+var _reported_motor_rpm := Callable()
 
 
-func setup(vehicle: Vehicle, cockpit_parts: Array[Node3D]) -> String:
+func setup(
+	vehicle: Vehicle, cockpit_parts: Array[Node3D], reported_motor_rpm := Callable()
+) -> String:
 	## Turns the parts of `cockpit_parts` that the vehicle's instruments name as `vehicle`
-	## moves. Returns "" or what is wrong with the pack.
+	## moves, the rev counter to what `reported_motor_rpm` returns (SimulatorLink.motor_rpm),
+	## at rest without it. Returns "" or what is wrong with the pack.
 	_vehicle = vehicle
+	_reported_motor_rpm = reported_motor_rpm
 	name = "Instruments"
 	var instruments := vehicle.spec.instruments
 	var named := {}
@@ -70,7 +75,9 @@ func _process(_delta: float) -> void:
 		)
 	if _rev_counter_needle != null:
 		var rev_counter := instruments.rev_counter
-		var rpm := Powertrain.motor_rpm(spec, _vehicle.speed_m_s)
+		var rpm := 0.0
+		if _reported_motor_rpm.is_valid():
+			rpm = absf(_reported_motor_rpm.call())
 		_rev_counter_needle.turn_to(
 			InstrumentScales.rev_counter_angle_deg(
 				rpm, rev_counter.deg_per_rpm, rev_counter.max_rpm

@@ -6,6 +6,15 @@ const OVCS_DRIVE_PAYLOAD_HEX := (
 	"00367B2274797065223A226472697665222C2273706565645F6D5F73223A322E352C"
 	+ "227374656572696E675F726164223A2D302E3132357D"
 )
+# SimulatorCore.Link.Protocol.encode(%Instruments{motor_rpm: -1250.5})
+const OVCS_INSTRUMENTS_PAYLOAD_HEX := (
+	"002A7B2274797065223A22696E737472756D656E7473222C" + "226D6F746F725F72706D223A2D313235302E357D"
+)
+# SimulatorCore.Link.Protocol.encode(%Instruments{motor_rpm: 3200}): a whole rpm, as the Leaf
+# inverter reports it.
+const OVCS_WHOLE_RPM_INSTRUMENTS_PAYLOAD_HEX := (
+	"00277B2274797065223A22696E737472756D656E7473222C" + "226D6F746F725F72706D223A333230307D"
+)
 
 
 func test_decodes_a_drive_ovcs_encoded() -> void:
@@ -14,6 +23,17 @@ func test_decodes_a_drive_ovcs_encoded() -> void:
 	var message := LinkProtocol.decode(payload)
 
 	assert_eq(message, {"type": "drive", "speed_m_s": 2.5, "steering_rad": -0.125})
+
+
+func test_decodes_instruments_ovcs_encoded() -> void:
+	var cases := {
+		OVCS_INSTRUMENTS_PAYLOAD_HEX: -1250.5, OVCS_WHOLE_RPM_INSTRUMENTS_PAYLOAD_HEX: 3200.0
+	}
+	for payload_hex in cases:
+		var message := LinkProtocol.decode(payload_hex.hex_decode())
+
+		assert_eq(message, {"type": "instruments", "motor_rpm": cases[payload_hex]}, payload_hex)
+		assert_true(message["motor_rpm"] is float, "a whole rpm reads as a float")
 
 
 func test_rejects_malformed_payloads_naming_why() -> void:
@@ -26,6 +46,7 @@ func test_rejects_malformed_payloads_naming_why() -> void:
 		"invalid field drive.speed_m_s": _payload('{"type":"drive","steering_rad":0}'),
 		"invalid field drive.steering_rad":
 		_payload('{"type":"drive","speed_m_s":1,"steering_rad":"x"}'),
+		"invalid field instruments.motor_rpm": _payload('{"type":"instruments"}'),
 	}
 	for reason in cases:
 		assert_eq(LinkProtocol.decode(cases[reason]), {"error": reason}, reason)

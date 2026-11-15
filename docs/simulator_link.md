@@ -16,6 +16,7 @@ stream.
 | `type` | Direction | Header fields | Body |
 |---|---|---|---|
 | `drive` | OVCS → simulator | `speed_m_s`, `steering_rad` | none |
+| `instruments` | OVCS → simulator | `motor_rpm` | none |
 | `state` | simulator → OVCS | `time_s`, `odometer_m`, `position_m`, `orientation`, `linear_velocity_m_s`, `angular_velocity_rad_s`, `linear_acceleration_m_s2` | none |
 | `image` | simulator → OVCS | `camera` (`left`, `right`), `time_s`, `format` (`jpeg`) | the image |
 
@@ -23,7 +24,10 @@ Units are SI and frames are ROS's: `position_m` and `orientation` (`[x, y, z, w]
 vehicle's `base_link` in the world; velocities and `linear_acceleration_m_s2` are in
 `base_link`, the acceleration being what an IMU reads (gravity's reaction included).
 `steering_rad` is the front wheels' angle, positive to the left. `time_s` counts from the
-simulator's start; both images of a pair carry the same one.
+simulator's start; both images of a pair carry the same one. `motor_rpm` is the traction
+motor's speed as the vehicle's motor controller reports it, signed when the controller reports
+a direction (positive driving forward); OVCS sends it after each drive when the vehicle's
+simulated hardware has one (OVCS1's Leaf inverter does, the OVCS Mini sends none).
 
 ## Behaviour
 
@@ -33,7 +37,10 @@ simulator's start; both images of a pair carry the same one.
   skipped.
 - A `drive` holds until the next. With no drive for 0.5 s, or no connection, the vehicle is
   commanded to stop, keeping its steering.
-- A packet it cannot read is dropped with a warning.
+- The rev counter shows the last `motor_rpm`, either way round, while it is under 0.5 s old;
+  older, or with no connection, it shows 0.
+- A packet it cannot read, a message type it does not know among them, is dropped with a
+  warning: an older or newer OVCS keeps working with the messages both know.
 - Sending never blocks the simulator. While more than 2 MiB are waiting for OVCS to read them,
   images are dropped and states still sent; beyond 32 MiB the simulator disconnects.
 - Images carry the time and state of the frame they show, one physics step before the

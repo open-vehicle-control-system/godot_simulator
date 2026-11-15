@@ -2,12 +2,14 @@ class_name SimulatorLink
 extends Node
 ## The TCP client of OVCS's simulator link (SimulatorCore.Link): applies the drives OVCS sends
 ## to the vehicle and sends the vehicle's state every physics step, and camera images when
-## given them.
+## given them. It keeps the motor rpm OVCS last reported, for the rev counter.
 ##
-## With no drive for DRIVE_TIMEOUT_S, or no connection, the vehicle is commanded to stop.
+## With no drive for DRIVE_TIMEOUT_S, or no connection, the vehicle is commanded to stop. With
+## no instruments for INSTRUMENTS_TIMEOUT_S, or no connection, the motor rpm reads 0.
 
 const RECONNECT_S := 1.0
 const DRIVE_TIMEOUT_S := 0.5
+const INSTRUMENTS_TIMEOUT_S := 0.5
 ## Unsent bytes beyond which images are dropped: states keep flowing to a slow reader.
 const MAX_IMAGE_BACKLOG_BYTES := 2 * 1024 * 1024
 ## Unsent bytes beyond which OVCS has stopped reading: the connection is dropped.
@@ -23,6 +25,8 @@ var _peer := StreamPeerTCP.new()
 var _framer := LinkProtocol.Framer.new()
 var _retry_in_s := 0.0
 var _since_drive_s := INF
+var _motor_rpm := 0.0
+var _motor_rpm_received_s := -INF  ## on time_s's clock
 var _outgoing := PackedByteArray()
 
 
@@ -42,6 +46,14 @@ func send_image(
 		_send(LinkProtocol.encode_image(camera, image_time_s, format, image))
 
 
+func motor_rpm() -> float:
+	## The motor rpm OVCS last reported, signed as its motor controller reports it; 0 when the
+	## last report is older than INSTRUMENTS_TIMEOUT_S or there is none.
+	if time_s - _motor_rpm_received_s > INSTRUMENTS_TIMEOUT_S:
+		return 0.0
+	return _motor_rpm
+
+
 func _physics_process(delta: float) -> void:
 	if _vehicle == null:
 		return
@@ -49,7 +61,7 @@ func _physics_process(delta: float) -> void:
 	_since_drive_s += delta
 	_keep_connected(delta)
 	if connected:
-		_read_drives()
+		_read_messages()
 	if _since_drive_s > DRIVE_TIMEOUT_S:
 		_vehicle.stop()
 	if connected:
@@ -80,7 +92,7 @@ func _keep_connected(delta: float) -> void:
 		_peer.connect_to_host(_host, _port)
 
 
-func _read_drives() -> void:
+func _read_messages() -> void:
 	var available := _peer.get_available_bytes()
 	if available <= 0:
 		return
@@ -92,8 +104,12 @@ func _read_drives() -> void:
 		if message.has("error"):
 			push_warning("link: dropped a packet: %s" % message["error"])
 			continue
-		_since_drive_s = 0.0
-		_vehicle.command(message["speed_m_s"], message["steering_rad"])
+		if message["type"] == "drive":
+			_since_drive_s = 0.0
+			_vehicle.command(message["speed_m_s"], message["steering_rad"])
+		else:
+			_motor_rpm = message["motor_rpm"]
+			_motor_rpm_received_s = time_s
 	if _framer.broken:
 		_disconnect("received a length no OVCS packet has")
 
@@ -115,6 +131,7 @@ func _disconnect(reason: String) -> void:
 	print("link: %s" % reason)
 	connected = false
 	_since_drive_s = INF
+	_motor_rpm_received_s = -INF
 	_outgoing.clear()
 	_peer.disconnect_from_host()
 	_vehicle.stop()

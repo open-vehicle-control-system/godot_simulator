@@ -119,12 +119,10 @@ for a vehicle; x, y, z up for a world.
   6° of slip at the rear and 10° at the front, the sedan understeers by about 2° per g
   (ISO 4138) and braking at 0.6 g in a 0.57 g turn tightens its line a little without a slide
   (ISO 7975).
-- `powertrain` is what drives the vehicle under `--keyboard` and what the rev counter reads
+- `powertrain` is what drives the vehicle under `--keyboard`
   ([Driven by the keys](./architecture.md#driven-by-the-keys)); which axle it drives is
   `dynamics.driven_axle`. Under OVCS the speed is OVCS's, and OVCS's simulated hardware has its
-  own motor-to-wheel ratio (for OVCS1, `Ovcs1.Simulation` in the OVCS repository): it must
-  match the selected gear times the final drive, or the rev counter and the speed OVCS
-  measures disagree. Sources for the values of the vehicles built here are in their builders
+  own motor-to-wheel ratio (for OVCS1, `Ovcs1.Simulation` in the OVCS repository). Sources for the values of the vehicles built here are in their builders
   (`tools/default_vehicle.py`, `tools/pack_experiment.py`).
 
   | Field | Meaning | Unit, range | Typical |
@@ -177,8 +175,8 @@ for a vehicle; x, y, z up for a world.
   steering wheel, as the vehicle steers left), from where the model draws it at zero.
   - `speedometer`: `km_h_to_deg` is the dial, two or more `[km/h, needle degrees]` marks in
     rising order; the needle goes straight between marks and stops at the dial's ends.
-  - `rev_counter` shows the motor's speed, the wheels' times the gear in use and the final
-    drive of `powertrain`, at `deg_per_rpm` up to `max_rpm`.
+  - `rev_counter` shows the motor rpm OVCS reports over the link, 0 without it, at
+    `deg_per_rpm` up to `max_rpm`.
   - `steering_wheel` turns by the front wheels' angle times `ratio`, up to `lock_deg` either
     way.
 - `mirrors` is optional: `material` is the glTF material of the `Body`'s mirror glass. Glass

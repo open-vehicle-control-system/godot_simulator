@@ -79,22 +79,20 @@ func test_names_a_missing_instrument_field() -> void:
 
 
 func test_needles_and_steering_wheel_follow_the_vehicle() -> void:
-	var cockpit := await _cockpit_on_flat_track("needles")
+	var cockpit := await _cockpit_on_flat_track("needles", {}, func(): return 3000.0)
 	var vehicle: Vehicle = cockpit["vehicle"]
 	var parts: Dictionary = cockpit["parts"]
 	var rest: Basis = parts["Cockpit_Speed"].basis
 
-	# 20 m/s is 72 km/h; the fixture's wheels of 0.3 m then turn the motor at 8 times their
-	# speed: its first gear (2) times its final drive (4).
+	# 20 m/s is 72 km/h.
 	vehicle.command(20.0, deg_to_rad(5.0))
 	await _physics_then_process_frames()
 
-	var rpm := 20.0 / (TAU * 0.3) * 60.0 * 8.0
 	assert_almost_eq(
 		parts["Cockpit_Speed"].basis.x, Basis(Vector3.BACK, deg_to_rad(72.0 * 1.2)) * rest.x, 1e-4
 	)
 	assert_almost_eq(
-		parts["Cockpit_Revs"].basis.x, Basis(Vector3.BACK, deg_to_rad(rpm * 0.05)) * rest.x, 1e-4
+		parts["Cockpit_Revs"].basis.x, Basis(Vector3.BACK, deg_to_rad(3000.0 * 0.05)) * rest.x, 1e-4
 	)
 	# Steering left turns the wheel anticlockwise seen from the seat: about the axis towards
 	# the driver.
@@ -105,19 +103,26 @@ func test_needles_and_steering_wheel_follow_the_vehicle() -> void:
 	assert_almost_eq(parts["Cockpit_Speed"].position, Vector3(0.38, 0.9, 0.3), 1e-5)
 
 
-func test_rev_counter_reads_the_motor_through_the_selected_gear() -> void:
-	var manifest := PackFixtures.cockpit_manifest("small_car")
-	manifest["vehicle"]["powertrain"]["gear"] = 2
-	var cockpit := await _cockpit_on_flat_track("second_gear", manifest)
+func test_rev_counter_shows_the_reported_rpm_whichever_way_the_motor_turns() -> void:
+	var cockpit := await _cockpit_on_flat_track("reverse_rpm", {}, func(): return -1000.0)
+	var needle: Node3D = cockpit["parts"]["Cockpit_Revs"]
+	# The rev counter has turned already; the speedometer at standstill rests as it does.
+	var rest: Basis = cockpit["parts"]["Cockpit_Speed"].basis
+
+	await _physics_then_process_frames()
+
+	assert_almost_eq(needle.basis.x, Basis(Vector3.BACK, deg_to_rad(1000.0 * 0.05)) * rest.x, 1e-4)
+
+
+func test_rev_counter_rests_without_a_reported_rpm_however_fast_the_vehicle_goes() -> void:
+	var cockpit := await _cockpit_on_flat_track("no_rpm")
 	var needle: Node3D = cockpit["parts"]["Cockpit_Revs"]
 	var rest := needle.basis
 
 	cockpit["vehicle"].command(20.0, 0.0)
 	await _physics_then_process_frames()
 
-	# Second gear (1) times the final drive (4).
-	var rpm := 20.0 / (TAU * 0.3) * 60.0 * 4.0
-	assert_almost_eq(needle.basis.x, Basis(Vector3.BACK, deg_to_rad(rpm * 0.05)) * rest.x, 1e-4)
+	assert_almost_eq(needle.basis.x, rest.x, 1e-6)
 
 
 func test_speedometer_shows_the_speed_when_reversing() -> void:
@@ -254,9 +259,12 @@ func _spec(test_name: String, manifest: Dictionary) -> VehicleSpec:
 	return found["vehicle"]
 
 
-func _cockpit_on_flat_track(test_name: String, manifest := {}) -> Dictionary:
+func _cockpit_on_flat_track(
+	test_name: String, manifest := {}, reported_motor_rpm := Callable()
+) -> Dictionary:
 	## `{"vehicle", "parts", "mirrors"}`: the cockpit fixture's vehicle (or `manifest`'s) on flat
-	## ground, its cockpit parts by name and its mirrors.
+	## ground, its cockpit parts by name and its mirrors; its rev counter shows
+	## `reported_motor_rpm`'s rpm, if given.
 	var directory := PackFixtures.fresh_directory(test_name + "_track")
 	var track_directory := PackFixtures.write_pack(directory, PackFixtures.track_manifest("flat"))
 	PackFixtures.write_flat_world(track_directory, 400.0)
@@ -271,7 +279,7 @@ func _cockpit_on_flat_track(test_name: String, manifest := {}) -> Dictionary:
 	vehicle.setup(spec, model)
 	var instruments := Instruments.new()
 	add_child(instruments)
-	assert_eq(instruments.setup(vehicle, model.cockpit_parts), "")
+	assert_eq(instruments.setup(vehicle, model.cockpit_parts, reported_motor_rpm), "")
 	var mirrors := Mirrors.new()
 	add_child(mirrors)
 	assert_eq(mirrors.setup(spec, model.body, null), "")

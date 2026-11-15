@@ -64,6 +64,50 @@ func test_drops_a_packet_it_does_not_read_and_keeps_going() -> void:
 	_server.stop()
 
 
+func test_keeps_the_motor_rpm_ovcs_reports_while_it_is_fresh() -> void:
+	var vehicle := await _linked_vehicle("instruments")
+	var link: SimulatorLink = vehicle.get_parent().get_node("SimulatorLink")
+	await _until_connected()
+	var before_any := link.motor_rpm()
+
+	_server.send_instruments(-2400.0)
+	await _step_and_poll(5)
+
+	assert_eq(before_any, 0.0)
+	assert_eq(link.motor_rpm(), -2400.0)
+	_server.stop()
+
+
+func test_reports_no_motor_rpm_once_ovcs_stops_sending_it() -> void:
+	var vehicle := await _linked_vehicle("stale_instruments")
+	var link: SimulatorLink = vehicle.get_parent().get_node("SimulatorLink")
+	await _until_connected()
+	_server.send_instruments(3000.0)
+	await _step_and_poll(5)
+
+	var frames_past_timeout := ceili(
+		(SimulatorLink.INSTRUMENTS_TIMEOUT_S + 0.1) * Engine.physics_ticks_per_second
+	)
+	await _step_and_poll(frames_past_timeout)
+
+	assert_eq(link.motor_rpm(), 0.0)
+	_server.stop()
+
+
+func test_reports_no_motor_rpm_once_the_connection_drops() -> void:
+	var vehicle := await _linked_vehicle("dropped_instruments")
+	var link: SimulatorLink = vehicle.get_parent().get_node("SimulatorLink")
+	await _until_connected()
+	_server.send_instruments(3000.0)
+	await _step_and_poll(5)
+
+	_server.drop_simulator()
+	await _step_and_poll(5)
+
+	assert_eq(link.motor_rpm(), 0.0)
+	_server.stop()
+
+
 func _linked_vehicle(test_name: String) -> Vehicle:
 	_server = LinkTestServer.new()
 	var directory := PackFixtures.fresh_directory("link_" + test_name)

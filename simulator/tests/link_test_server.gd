@@ -1,6 +1,7 @@
 class_name LinkTestServer
 extends RefCounted
-## OVCS's side of the simulator link, for tests: accepts the simulator, sends drives, and
+## OVCS's side of the simulator link, for tests: accepts the simulator, sends drives and
+## instruments, and
 ## collects the headers and bodies the simulator sends.
 
 var port: int
@@ -45,6 +46,11 @@ func send_drive(speed_m_s: float, steering_rad: float) -> void:
 	_peer.put_data(
 		LinkProtocol.packet({"type": "drive", "speed_m_s": speed_m_s, "steering_rad": steering_rad})
 	)
+
+
+func send_instruments(motor_rpm: float) -> void:
+	## Sends the motor's rpm to the connected simulator.
+	_peer.put_data(LinkProtocol.packet({"type": "instruments", "motor_rpm": motor_rpm}))
 
 
 func drop_simulator() -> void:
