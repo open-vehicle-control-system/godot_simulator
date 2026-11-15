@@ -12,6 +12,27 @@ each under its own licence. The simulator bundles only two: a small test circuit
 (`default_track`, generated from code with Poly Haven's trees and sky, CC0) and a mid-size sedan (`default_car`, whose model is
 "Generic Sedan Car" by Márcio Meireles, CC BY 4.0: see [Licences and credits](#licences-and-credits)).
 
+## What it looks like
+
+![The default car on the default track, chase view](docs/images/chase.jpg)
+
+| | |
+|---|---|
+| ![The cockpit view, with the steering wheel and a door mirror](docs/images/cockpit.jpg) | ![The default test circuit from above](docs/images/above.jpg) |
+| The cockpit view: the steering wheel follows the steering, the mirrors show what is behind. | The default test circuit from above: kerbs, run-offs, paddock buildings, trees. |
+
+![The left stereo camera with its ground truth](docs/images/ground_truth.jpg)
+
+The left stereo camera and its ground truth, recorded with `--record`: segmentation, depth and
+disparity, pixel for pixel ([Stereo camera](./docs/stereo.md)).
+
+![Spa-Francorchamps built from public geodata](docs/images/spa.jpg)
+
+A track the builders make from public data: Spa-Francorchamps from the Service public de
+Wallonie's LiDAR and orthophotos (CC BY 4.0, modified) and map data © OpenStreetMap
+contributors (ODbL 1.0). Not bundled: see [Pack format](./docs/pack_format.md) and
+[Track creation](./docs/track_creation.md).
+
 ## Run
 
 You need Godot 4.6 (`mise install` puts it on the PATH, or set `GODOT` to its binary). A clean
