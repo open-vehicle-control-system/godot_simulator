@@ -38,6 +38,11 @@ const SURFACE_CLASSES := {
 ## The render layer no object is on, which only the ground truth camera does not see.
 const LABEL_LAYER := 20
 const ALL_LAYERS := (1 << 20) - 1
+## The transparencies drawn blended over what is behind; Godot imports glTF's BLEND as the
+## second.
+const BLENDED := [
+	BaseMaterial3D.TRANSPARENCY_ALPHA, BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+]
 const LABEL_SHADER := preload("res://sensors/shaders/label.gdshader")
 
 static var _label_passes: Dictionary[int, ShaderMaterial] = {}
@@ -69,8 +74,10 @@ static func label_under(root: Node, class_id: int) -> void:
 
 
 static func _seen_through(material: Material) -> bool:
+	## True for a blended material: a label pass over it would hide what is behind it and write
+	## its depth. A cut-out (scissor, hash) is opaque where it is drawn.
 	var base := material as BaseMaterial3D
-	return base != null and base.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA
+	return base != null and base.transparency in BLENDED
 
 
 static func _last_pass(material: Material) -> Material:

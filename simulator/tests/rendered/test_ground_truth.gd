@@ -1,6 +1,7 @@
 extends TestCase
 ## The ground truth rendered of a generated scene: walls at known distances in front of the
-## stereo pair, one labelled, one not, a pane of glass before the first.
+## stereo pair, one labelled, one not, a pane of glass before the first; and a vehicle whose
+## windscreen, just before the pair, overlooks its bonnet and the first wall.
 
 const WIDTH_PX := 320
 const HEIGHT_PX := 180
@@ -8,10 +9,12 @@ const BASELINE_M := 0.2
 const MOUNT := Vector3(0.0, 1.0, 0.0)
 const NEAR_WALL_M := 4.0
 const FAR_WALL_M := 20.0
+const BONNET_TOP := Vector3(-0.3, 0.6, 0.9)
 const FRAMES_TO_READ_BACK := 120
 const SKY_COLOUR := Color8(70, 130, 180)
 const BUILDING_COLOUR := Color8(70, 70, 70)
 const UNLABELLED_COLOUR := Color8(0, 0, 0)
+const VEHICLE_COLOUR := Color8(0, 0, 142)
 
 var _frame: StereoFrame
 var _optics: VehicleSpec.StereoOptics
@@ -60,6 +63,23 @@ func test_segmentation_shows_the_class_each_surface_carries() -> void:
 	assert_eq(segmentation.get_pixel(WIDTH_PX / 2, 2), SKY_COLOUR)
 
 
+func test_a_windscreen_shows_what_is_behind_it() -> void:
+	await _render_the_walls()
+
+	var through_windscreen := _seen_at(Vector3(-1.0, 0.0, NEAR_WALL_M))
+	var segmentation := _frame.images["segmentation"]
+	assert_eq(segmentation.get_pixelv(through_windscreen), BUILDING_COLOUR)
+	assert_almost_eq(_map_at("depth", through_windscreen), NEAR_WALL_M, 1e-3)
+	assert_almost_eq(
+		_map_at("disparity", through_windscreen),
+		StereoCamera.disparity_px(_optics, NEAR_WALL_M),
+		1e-3
+	)
+	var on_bonnet := _seen_at(BONNET_TOP)
+	assert_eq(segmentation.get_pixelv(on_bonnet), VEHICLE_COLOUR, "the bonnet is the vehicle")
+	assert_almost_eq(_map_at("depth", on_bonnet), BONNET_TOP.z, 1e-2)
+
+
 func test_the_pair_is_not_drawn_with_labels() -> void:
 	await _render_the_walls()
 
@@ -92,6 +112,15 @@ func _render_the_walls() -> void:
 	scene.add_child(glass)
 	var vehicle := Node3D.new()
 	scene.add_child(vehicle)
+	var bonnet := _wall(Color.BLUE, Vector3(1.2, 0.1, 0.7), BONNET_TOP + Vector3(0.3, -0.05, 0.0))
+	vehicle.add_child(bonnet)
+	# As Godot imports glTF's BLEND glass: drawn after a depth pre-pass.
+	var windscreen := _wall(
+		Color(1.0, 1.0, 1.0, 0.1), Vector3(1.0, 0.25, 0.005), Vector3(0.0, 0.825, 0.3)
+	)
+	windscreen.material_override.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+	vehicle.add_child(windscreen)
+	Segmentation.label_under(vehicle, Segmentation.VEHICLE)
 	var stereo := StereoCamera.new()
 	scene.add_child(stereo)
 	stereo.setup(vehicle, _optics)

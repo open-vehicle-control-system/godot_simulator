@@ -158,8 +158,18 @@ func test_ground_truth_is_recorded_with_the_stereo_pair() -> void:
 	assert_true(not SimulatorOptions.parse(recording.slice(0, 3))["options"].ground_truth)
 	assert_eq(
 		SimulatorOptions.parse(PackedStringArray(["--track=t", "--vehicle=v", "--ground-truth"])),
-		{"error": "--ground-truth is recorded: it needs --stereo-record"}
+		{"error": "--ground-truth is recorded: it needs --stereo-record or --record"}
 	)
+
+
+func test_record_records_the_ground_truth_with_or_without_ground_truth() -> void:
+	var recording := PackedStringArray(
+		["--track=t", "--vehicle=v", "--record=/tmp/run", "--record-seconds=1", "--hold=30,0"]
+	)
+	var parsed := SimulatorOptions.parse(recording + PackedStringArray(["--ground-truth"]))
+	assert_true(parsed.has("options"), "refused: %s" % parsed)
+	assert_true(parsed["options"].records_ground_truth())
+	assert_true(SimulatorOptions.parse(recording)["options"].records_ground_truth())
 
 
 func test_record_takes_a_directory_and_how_long_to_record() -> void:

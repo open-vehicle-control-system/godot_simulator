@@ -66,9 +66,22 @@ func test_labels_what_every_mesh_under_a_node_is_drawn_with_but_glass() -> void:
 	var glass := StandardMaterial3D.new()
 	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	window.set_surface_override_material(0, glass)
+	# How Godot imports glTF's BLEND glass.
+	var windscreen := MeshInstance3D.new()
+	windscreen.mesh = QuadMesh.new()
+	var sorted_glass := StandardMaterial3D.new()
+	sorted_glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+	windscreen.set_surface_override_material(0, sorted_glass)
+	var grille := MeshInstance3D.new()
+	grille.mesh = QuadMesh.new()
+	var cut_out := StandardMaterial3D.new()
+	cut_out.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	grille.set_surface_override_material(0, cut_out)
 	vehicle.add_child(body)
 	body.add_child(wheel)
 	body.add_child(window)
+	body.add_child(windscreen)
+	body.add_child(grille)
 
 	Segmentation.label_under(vehicle, Segmentation.VEHICLE)
 	Segmentation.label_under(vehicle, Segmentation.VEHICLE)
@@ -78,6 +91,8 @@ func test_labels_what_every_mesh_under_a_node_is_drawn_with_but_glass() -> void:
 	assert_eq(wheel.get_active_material(0).next_pass, label, "a mesh without material")
 	assert_true(label.next_pass == null, "labelled twice")
 	assert_true(glass.next_pass == null, "glass shows what is behind it")
+	assert_true(sorted_glass.next_pass == null, "glass drawn after a depth pre-pass too")
+	assert_eq(cut_out.next_pass, label, "a cut-out is opaque where it is drawn")
 	vehicle.free()
 
 

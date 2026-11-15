@@ -75,7 +75,7 @@ without gaps.
 ## Recording the same twice
 
 `--record=DIR` records the pair and its ground truth so that two runs record the same, and
-quits when done:
+quits when done; `--ground-truth` beside it changes nothing:
 
 ```sh
 ./simulate.sh --track=spa --vehicle=ovcs1 --hold=100,2 --record=runs/spa_a --record-seconds=20
@@ -139,8 +139,10 @@ the floats, little-endian, row by row from the top.
 - A third camera, at the left one's place, draws these: every surface shows it its class
   instead of its colour, and a compute pass turns its depth buffer and the classes into the
   three maps on the GPU. It draws only the frames that are recorded.
-- What is seen through (glass) has no depth and no class of its own: the pixel carries those
-  of what is behind it. A tree's cut-out is that of its image.
+- What is seen through (glass: any material blended over what is behind it, the glTF `BLEND`
+  alpha mode among them) has no depth and no class of its own: the pixel carries those of
+  what is behind it. A cut-out (glTF `MASK`) is opaque where it is drawn; a tree's cut-out is
+  that of its image.
 - `calib.json` lists the classes with their ids and colours.
 
 Recording the pair holds 60 frames a second with or without the ground truth (Spa, 1280 × 720

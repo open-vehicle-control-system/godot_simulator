@@ -46,7 +46,7 @@ only when its source is there).
 | `--hold=KM_H,STEERING_DEG` | hold this speed and front wheel angle (positive left) instead, without OVCS: for a screenshot of a moving vehicle |
 | `--camera=VIEW` | `chase`, `cockpit`, `bonnet`, `side` or `front` |
 | `--stereo-record=DIR` | record stereo pairs, poses and calibration ([Stereo camera](./docs/stereo.md)) |
-| `--ground-truth` | with `--stereo-record`, record each pair's depth, disparity and segmentation too ([Stereo camera](./docs/stereo.md#ground-truth)) |
+| `--ground-truth` | with `--stereo-record`, record each pair's depth, disparity and segmentation too; `--record` always does ([Stereo camera](./docs/stereo.md#ground-truth)) |
 | `--record=DIR` | record the pair and its ground truth frame by frame, the same run after run, for `--record-seconds=S` or the length of the drive log, then quit ([Stereo camera](./docs/stereo.md#recording-the-same-twice)) |
 | `--drive-log=FILE` | drive as a CSV tells over time (`time_s`, `speed_m_s`, `steering_rad`: a recording's `poses.csv` is one), without OVCS |
 | `--show-stereo` | show the stereo pair at start |

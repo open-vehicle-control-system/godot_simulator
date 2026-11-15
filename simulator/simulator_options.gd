@@ -14,7 +14,7 @@ extends RefCounted
 ##   --camera=VIEW           chase, cockpit, bonnet, side or front (chase by default)
 ##   --stereo-record=DIR     record stereo pairs, poses and calibration into DIR
 ##   --ground-truth          with --stereo-record, record each pair's depth, disparity and
-##                           segmentation too
+##                           segmentation too (--record always does)
 ##   --record=DIR            record the stereo pair and its ground truth into DIR frame by
 ##                           frame at a fixed simulated rate, so that two runs record the
 ##                           same: needs Godot's --fixed-fps, which simulate.sh passes
@@ -87,8 +87,8 @@ static func parse(arguments: PackedStringArray) -> Dictionary:
 		return {"error": "--keyboard and --link both drive the vehicle: choose one"}
 	if options.hold_given and (options.keyboard or options.link_host != ""):
 		return {"error": "--hold drives the vehicle: not with --keyboard or --link"}
-	if options.ground_truth and options.stereo_record_directory == "":
-		return {"error": "--ground-truth is recorded: it needs --stereo-record"}
+	if options.ground_truth and options.recording_directory() == "":
+		return {"error": "--ground-truth is recorded: it needs --stereo-record or --record"}
 	var problem := options._what_is_wrong_with_recording()
 	if problem != "":
 		return {"error": problem}
