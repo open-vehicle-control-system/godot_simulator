@@ -35,7 +35,7 @@ contributors (ODbL 1.0). Not bundled: see [Pack format](./docs/pack_format.md) a
 
 ## Run
 
-You need Godot 4.6 (`mise install` puts it on the PATH, or set `GODOT` to its binary). A clean
+You need Godot 4.7 (`mise install` puts it on the PATH, or set `GODOT` to its binary). A clean
 clone drives the default car on the default track:
 
 ```sh

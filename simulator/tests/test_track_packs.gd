@@ -36,7 +36,7 @@ func test_places_the_spawn_pose_from_ros_position_and_yaw() -> void:
 func test_a_track_without_a_sky_gets_a_procedural_one() -> void:
 	var track := _flat_track("procedural_sky", PackFixtures.track_manifest("flat"))
 
-	var environment: Environment = TrackWorld.lighting(track)["environment"]
+	var environment: Environment = _lit_environment(track)
 
 	assert_true(environment.sky.sky_material is ProceduralSkyMaterial)
 
@@ -50,14 +50,14 @@ func test_a_track_with_a_sky_shows_its_panorama() -> void:
 	Image.create(8, 4, false, Image.FORMAT_RGB8).save_png(pack_directory.path_join("sky.png"))
 	var track: TrackSpec = PackLibrary.scan([directory]).load_track("flat")["track"]
 
-	var environment: Environment = TrackWorld.lighting(track)["environment"]
+	var environment: Environment = _lit_environment(track)
 
 	assert_true(environment.sky.sky_material is PanoramaSkyMaterial)
 
 
 func test_the_window_is_lit_indirectly_and_the_world_is_not() -> void:
 	var track := _flat_track("indirect", PackFixtures.track_manifest("flat"))
-	var world_lighting: Environment = TrackWorld.lighting(track)["environment"]
+	var world_lighting: Environment = _lit_environment(track)
 
 	var window_lighting := TrackWorld.window_lighting(world_lighting, track)
 
@@ -73,7 +73,7 @@ func test_a_pack_sets_how_strong_the_indirect_light_is() -> void:
 	manifest["track"]["indirect_light"] = {"strength": 1.5}
 	var track := _flat_track("indirect_strength", manifest)
 
-	var lit := TrackWorld.window_lighting(TrackWorld.lighting(track)["environment"], track)
+	var lit := TrackWorld.window_lighting(_lit_environment(track), track)
 
 	assert_almost_eq(lit.ssil_intensity, 1.5)
 
@@ -83,7 +83,7 @@ func test_a_pack_does_without_indirect_light() -> void:
 	manifest["track"]["indirect_light"] = {"strength": 0.0}
 	var track := _flat_track("indirect_none", manifest)
 
-	var lit := TrackWorld.window_lighting(TrackWorld.lighting(track)["environment"], track)
+	var lit := TrackWorld.window_lighting(_lit_environment(track), track)
 
 	assert_true(not lit.ssil_enabled)
 
@@ -120,3 +120,10 @@ func test_refuses_a_sky_that_is_not_there() -> void:
 	var found := PackLibrary.scan([directory]).load_track("flat")
 
 	assert_eq(found, {"error": "flat: track.sky names sky.hdr, which is not in the pack"})
+
+
+static func _lit_environment(track: TrackSpec) -> Environment:
+	## The track's lighting environment; its sun, which no test adds to a scene, freed.
+	var lighting := TrackWorld.lighting(track)
+	lighting["sun"].free()
+	return lighting["environment"]

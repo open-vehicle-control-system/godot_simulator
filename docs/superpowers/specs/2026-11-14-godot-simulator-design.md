@@ -18,7 +18,7 @@ model is the one exception to generated, CC0 content: "Generic Sedan Car" by Má
 
 ## Goals
 
-- Move a vehicle by the actuator efforts OVCS sends over the simulator link, in Godot 4.6:
+- Move a vehicle by the actuator efforts OVCS sends over the simulator link, in Godot 4.7:
   body, suspension, each wheel's spin, tyres and contact with the world, so what the VMS
   measures can differ from how the vehicle moves as it does on the road.
 - Report the vehicle's state, its wheels and a rectified stereo pair over the link, and record

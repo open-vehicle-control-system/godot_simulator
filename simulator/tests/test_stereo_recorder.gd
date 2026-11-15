@@ -121,9 +121,11 @@ func test_reports_a_directory_it_cannot_write() -> void:
 	FileAccess.open(directory.path_join("taken"), FileAccess.WRITE).store_string("a file")
 	var recorder := StereoRecorder.new()
 	add_child(recorder)
+	var vehicle := Vehicle.new()
+	add_child(vehicle)
 
 	var problem := recorder.setup(
-		directory.path_join("taken/run"), Vehicle.new(), 10.0, {}, _hand_over_a_pair
+		directory.path_join("taken/run"), vehicle, 10.0, {}, _hand_over_a_pair
 	)
 
 	assert_true(problem.begins_with("recorder: cannot write"), problem)

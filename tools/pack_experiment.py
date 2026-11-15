@@ -18,7 +18,7 @@ compressed there with Godot's encoders (compress_textures.gd, run with the Godot
 the GODOT environment variable). The experiment's
 frames are Godot's (+X left, +Y up, +Z forward); pack.json takes ROS ones (x forward, y left, z up).
 
-Needs numpy and Pillow, and Godot 4.6 to compress the textures.
+Needs numpy and Pillow, and Godot 4.7 to compress the textures.
 """
 
 import io

@@ -170,6 +170,7 @@ func test_the_sun_is_where_the_pack_puts_it() -> void:
 	var track := _ground_track("sun", manifest)
 
 	var sun: DirectionalLight3D = TrackWorld.lighting(track)["sun"]
+	add_child(sun)
 
 	assert_almost_eq(track.sun_direction(), Vector3(cos(PI / 6.0), 0.5, 0.0), 1e-6)
 	assert_almost_eq(sun.basis.z, track.sun_direction(), 1e-5)
@@ -276,7 +277,7 @@ func test_a_sky_is_turned_so_its_sun_is_where_the_light_comes_from() -> void:
 	panorama.save_png(pack_directory.path_join("sky.png"))
 	var track: TrackSpec = PackLibrary.scan([directory]).load_track("flat")["track"]
 
-	var environment: Environment = TrackWorld.lighting(track)["environment"]
+	var environment: Environment = _lit_environment(track)
 
 	# From +X to +Z (ROS azimuth 0) is a quarter turn back about +Y.
 	assert_almost_eq(environment.sky_rotation.y, -PI / 2.0, 0.05)
@@ -340,3 +341,10 @@ func _add_facade_with_shop_windows(track: Dictionary) -> void:
 		"tint": [1, 1, 1],
 	}
 	track["surfaces"].append(facade)
+
+
+static func _lit_environment(track: TrackSpec) -> Environment:
+	## The track's lighting environment; its sun, which no test adds to a scene, freed.
+	var lighting := TrackWorld.lighting(track)
+	lighting["sun"].free()
+	return lighting["environment"]

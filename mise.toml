@@ -1,11 +1,11 @@
 [tools]
-godot = "4.6.3"
+godot = "4.7.2"
 python = "3.12"
 "pipx:gdtoolkit" = "4.5.0"
 ruff = "0.17.5"
 
 [env]
-# The Godot 4.6 binary the scripts run; mise puts its own on the PATH.
+# The Godot 4.7 binary the scripts run; mise puts its own on the PATH.
 GODOT = "{{ env.GODOT | default(value='godot') }}"
 
 [tasks.test]

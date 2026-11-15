@@ -25,6 +25,8 @@ layout(push_constant, std430) uniform Camera {
 	vec4 radial_tangential;  // k1, k2, p1, p2
 	vec4 lens;  // k3, overscan, half width and half height of the image in focal lengths
 	float sky_class;
+	// The block is a whole number of 16-byte blocks: the size the effect supplies.
+	float padding[3];
 } camera;
 
 void main() {

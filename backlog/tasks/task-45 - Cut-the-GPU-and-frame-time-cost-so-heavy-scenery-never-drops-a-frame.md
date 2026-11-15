@@ -4,6 +4,7 @@ title: Cut the GPU and frame-time cost so heavy scenery never drops a frame
 status: To Do
 assignee: []
 created_date: '2026-11-15 17:50'
+updated_date: '2026-11-15 18:03'
 labels:
   - performance
   - rendering
@@ -32,3 +33,9 @@ The stereo pair's images and ground truth must not change (rendered tests), and 
 - [ ] #2 On Spa at speed: no frame over 16.7 ms in a lap, GPU time under 10 ms
 - [ ] #3 The stereo pair, its ground truth and --record are unchanged (rendered tests pass)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Godot 4.7.2 (from 4.6.3), same Spa lap at 120 km/h, warm caches, two runs each: GPU 8.4-12.1 ms a frame (4.6.3: 11.9-12.4), fewer primitives at the same places (4.2 M vs 4.9 M at the start) with the image unchanged (spawn screenshot: mean difference 0.24 of 255, 0.15 % of pixels visibly, at the car's paint and shadow edge); the other viewports 5.0 ms (6.1). Worst frames unchanged, 17-23 ms: the spikes are not the GPU's.
+<!-- SECTION:NOTES:END -->

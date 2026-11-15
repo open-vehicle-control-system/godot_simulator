@@ -12,7 +12,7 @@ tree_impostors.py, once, which needs BLENDER_PYTHON (a Python with Blender's bpy
 its sky is downloaded once. The textures are compressed into DDS by Godot's own encoders
 (compress_textures.gd, run with the Godot named by the GODOT environment variable).
 
-Needs numpy and Pillow, and Godot 4.6 to compress the textures.
+Needs numpy and Pillow, and Godot 4.7 to compress the textures.
 """
 
 import json

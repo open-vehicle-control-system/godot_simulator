@@ -165,7 +165,7 @@ func test_the_haze_is_as_thick_as_the_packs_visibility_tells() -> void:
 	PackFixtures.write_flat_world(PackFixtures.write_pack(directory, manifest), 20.0)
 	var track: TrackSpec = PackLibrary.scan([directory]).load_track("hazy")["track"]
 
-	var environment: Environment = TrackWorld.lighting(track)["environment"]
+	var environment: Environment = _lit_environment(track)
 
 	assert_true(environment.fog_enabled)
 	# A black object 8 km away keeps 2% of its contrast.
@@ -180,7 +180,7 @@ func test_a_track_without_haze_has_clear_air() -> void:
 	PackFixtures.write_flat_world(PackFixtures.write_pack(directory, manifest), 20.0)
 	var track: TrackSpec = PackLibrary.scan([directory]).load_track("clear")["track"]
 
-	var environment: Environment = TrackWorld.lighting(track)["environment"]
+	var environment: Environment = _lit_environment(track)
 
 	assert_almost_eq(exp(-environment.fog_density * TrackWorld.DEFAULT_VISIBILITY_M), 0.02, 1e-6)
 
@@ -211,3 +211,10 @@ func _world_with_trees(id: String, trees: Dictionary) -> TrackTiles:
 	PackFixtures.write_tile_objects(pack, "a", {"trees": standing})
 	var track: TrackSpec = PackLibrary.scan([directory]).load_track(id)["track"]
 	return TrackWorld.load_world(track)["world"]
+
+
+static func _lit_environment(track: TrackSpec) -> Environment:
+	## The track's lighting environment; its sun, which no test adds to a scene, freed.
+	var lighting := TrackWorld.lighting(track)
+	lighting["sun"].free()
+	return lighting["environment"]
