@@ -64,7 +64,6 @@ class InstrumentsTest(unittest.TestCase):
                 "axis": [0.9, 0.0, -0.3],
                 "deg_per_rpm": 0.05,
                 "max_rpm": 6000,
-                "motor_to_wheel_ratio": 8.0,
             },
         )
 
@@ -101,6 +100,22 @@ class DynamicsTest(unittest.TestCase):
                     **weighed, front_axle_x_m=1.0, rear_axle_x_m=-1.0
                 ),
             )
+
+
+class PowertrainTest(unittest.TestCase):
+    """What drives each vehicle."""
+
+    def test_ovcs1_runs_its_leaf_motor_through_the_polos_first_gear(self):
+        powertrain = pack_experiment.POWERTRAINS["ovcs1"]
+
+        self.assertEqual(powertrain["motor"]["max_power_w"], 80000.0)
+        self.assertEqual(powertrain["gear"], 1)
+        self.assertEqual(len(powertrain["gear_ratios"]), 5)
+        overall = powertrain["gear_ratios"][0] * powertrain["final_drive_ratio"]
+        self.assertAlmostEqual(overall, 11.18, places=2)
+
+    def test_every_vehicle_weighed_has_a_powertrain(self):
+        self.assertEqual(set(pack_experiment.POWERTRAINS), set(pack_experiment.WEIGHED))
 
 
 class MaterialNamesTest(unittest.TestCase):

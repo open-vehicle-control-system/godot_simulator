@@ -1,8 +1,9 @@
 class_name Instruments
 extends Node
 ## The cockpit's moving parts: the speedometer and rev counter needles and the steering wheel,
-## each turned about its own pivot to show the vehicle's speed and steering, by the scales of
-## the vehicle pack's `instruments` (InstrumentScales).
+## each turned about its own pivot to show the vehicle's speed, its motor's speed in the gear in
+## use (Powertrain) and its steering, by the scales of the vehicle pack's `instruments`
+## (InstrumentScales).
 
 const KM_H_PER_M_S := 3.6
 
@@ -69,9 +70,7 @@ func _process(_delta: float) -> void:
 		)
 	if _rev_counter_needle != null:
 		var rev_counter := instruments.rev_counter
-		var rpm := InstrumentScales.motor_rpm(
-			_vehicle.speed_m_s, spec.wheel_radius_m, rev_counter.motor_to_wheel_ratio
-		)
+		var rpm := Powertrain.motor_rpm(spec, _vehicle.speed_m_s)
 		_rev_counter_needle.turn_to(
 			InstrumentScales.rev_counter_angle_deg(
 				rpm, rev_counter.deg_per_rpm, rev_counter.max_rpm

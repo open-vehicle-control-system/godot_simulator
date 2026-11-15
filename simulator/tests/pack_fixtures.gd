@@ -49,6 +49,16 @@ static func vehicle_manifest(id: String) -> Dictionary:
 				"tyre_shape": 1.3,
 				"tyre_curvature": -1.5,
 			},
+			"powertrain":
+			{
+				"motor": {"max_power_w": 80000.0, "max_torque_n_m": 250.0, "max_rpm": 10000.0},
+				"gear_ratios": [2.0, 1.0],
+				"final_drive_ratio": 4.0,
+				"gear": 1,
+				"driveline_efficiency": 0.9,
+				"rolling_resistance_coefficient": 0.011,
+				"drag_area_m2": 0.65,
+			},
 			"body": {"size_m": [3.9, 1.6, 1.0], "centre_m": [0.0, 0.0, 0.85]},
 			"driver_eye_m": [-0.2, 0.38, 1.1],
 			"driver_pitch_deg": -3.0,
@@ -84,7 +94,6 @@ static func cockpit_manifest(id: String) -> Dictionary:
 			"axis": [1.0, 0.0, 0.0],
 			"deg_per_rpm": 0.05,
 			"max_rpm": 6000,
-			"motor_to_wheel_ratio": 8.0,
 		},
 		"steering_wheel":
 		{"node": "Cockpit_Steer", "axis": [-1.0, 0.0, 0.0], "ratio": 16.0, "lock_deg": 500.0},

@@ -18,7 +18,6 @@ class RevCounter:
 	var axis: Vector3
 	var deg_per_rpm: float
 	var max_rpm: float  ## the dial's last mark
-	var motor_to_wheel_ratio: float  ## motor turns per wheel turn
 
 
 class SteeringWheel:
@@ -49,9 +48,6 @@ static func parse(reader: ManifestReader) -> InstrumentsSpec:
 		rev_counter.axis = _axis(reader, "instruments.rev_counter.axis")
 		rev_counter.deg_per_rpm = reader.positive("instruments.rev_counter.deg_per_rpm")
 		rev_counter.max_rpm = reader.positive("instruments.rev_counter.max_rpm")
-		rev_counter.motor_to_wheel_ratio = reader.positive(
-			"instruments.rev_counter.motor_to_wheel_ratio"
-		)
 		instruments.rev_counter = rev_counter
 	if reader.has("instruments.steering_wheel"):
 		var steering_wheel := SteeringWheel.new()

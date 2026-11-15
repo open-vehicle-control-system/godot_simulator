@@ -1,4 +1,4 @@
-"""A vehicle pack's `vehicle.dynamics`: what the simulator's dynamic bicycle model moves it by.
+"""A vehicle pack's `vehicle.dynamics` and `vehicle.powertrain`: what moves it in the simulator.
 
 A road car's dynamics follow from what is weighed and measured on it (mass, weight split,
 wheelbase, centre of gravity height, driven axle, tyre friction) and from what is typical of
@@ -21,10 +21,16 @@ production cars:
 - Brakes: 70 % front by design, the rear's share kept 5 % below its share of the load by a
   proportioning valve or EBD, so the front wheels lock first, as UN ECE R13-H's braking
   distribution rules ask.
+
+A powertrain is its motor's (or engine's) published power, torque and rpm limit, its gearbox's
+ratios, and what holds the vehicle back, the drag area (drag coefficient times frontal area)
+and the rolling resistance coefficient (0.010 to 0.015 for car tyres on asphalt, Gillespie
+ch. 4). A manual gearbox and final drive pass on about 90 % of the torque (Gillespie ch. 2).
 """
 
 GRAVITY_M_S2 = 9.81
 YAW_INERTIA_PER_MASS_TIMES_AXLE_DISTANCES = 0.9
+DRIVELINE_EFFICIENCY = 0.9
 FRONT_STIFFNESS_PER_LOAD_PER_RAD = 12.5
 REAR_STIFFNESS_PER_LOAD_PER_RAD = 22.0
 ROAD_CAR = {
@@ -47,13 +53,18 @@ def road_car(
     centre_of_gravity_height_m,
     driven_axle,
     friction,
+    yaw_inertia_per_mass_times_axle_distances=YAW_INERTIA_PER_MASS_TIMES_AXLE_DISTANCES,
 ):
-    """Return `vehicle.dynamics` for a road car weighed and measured as given."""
+    """Return `vehicle.dynamics` for a road car weighed and measured as given.
+
+    A car whose heavy parts sit over its axles turns harder than the typical one: give it a
+    larger `yaw_inertia_per_mass_times_axle_distances`.
+    """
     wheelbase_m = front_axle_x_m - rear_axle_x_m
     ahead_m = (1.0 - front_weight_share) * wheelbase_m
     behind_m = front_weight_share * wheelbase_m
     weight_n = mass_kg * GRAVITY_M_S2
-    yaw_inertia = YAW_INERTIA_PER_MASS_TIMES_AXLE_DISTANCES * mass_kg * ahead_m * behind_m
+    yaw_inertia = yaw_inertia_per_mass_times_axle_distances * mass_kg * ahead_m * behind_m
     front_stiffness = FRONT_STIFFNESS_PER_LOAD_PER_RAD * weight_n * front_weight_share
     rear_stiffness = REAR_STIFFNESS_PER_LOAD_PER_RAD * weight_n * (1.0 - front_weight_share)
     return {
@@ -66,4 +77,31 @@ def road_car(
         "front_cornering_stiffness_n_per_rad": float(f"{front_stiffness:.3g}"),
         "rear_cornering_stiffness_n_per_rad": float(f"{rear_stiffness:.3g}"),
         **ROAD_CAR,
+    }
+
+
+def powertrain(
+    *,
+    max_power_w,
+    max_torque_n_m,
+    max_rpm,
+    gear_ratios,
+    final_drive_ratio,
+    gear,
+    rolling_resistance_coefficient,
+    drag_area_m2,
+):
+    """Return `vehicle.powertrain` for a motor driving through a manual gearbox, as given."""
+    return {
+        "motor": {
+            "max_power_w": max_power_w,
+            "max_torque_n_m": max_torque_n_m,
+            "max_rpm": max_rpm,
+        },
+        "gear_ratios": gear_ratios,
+        "final_drive_ratio": final_drive_ratio,
+        "gear": gear,
+        "driveline_efficiency": DRIVELINE_EFFICIENCY,
+        "rolling_resistance_coefficient": rolling_resistance_coefficient,
+        "drag_area_m2": drag_area_m2,
     }

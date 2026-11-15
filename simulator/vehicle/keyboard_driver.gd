@@ -21,5 +21,5 @@ func _physics_process(delta: float) -> void:
 	}
 	# An obstacle may have stopped the vehicle: drive on from its real speed.
 	_drive["speed_m_s"] = _vehicle.speed_m_s
-	_drive = KeyboardDrive.next(_drive, keys, delta)
+	_drive = KeyboardDrive.next(_drive, keys, delta, _vehicle.spec)
 	_vehicle.command(_drive["speed_m_s"], _drive["steering_rad"])

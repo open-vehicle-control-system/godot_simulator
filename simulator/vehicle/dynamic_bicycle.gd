@@ -22,6 +22,7 @@ const MAX_SUBSTEPS := 200
 ## An axle always keeps this share of the weight, and this share of its grip sideways.
 const MIN_AXLE_LOAD_SHARE := 0.05
 const MIN_SIDE_GRIP_SHARE := 0.1
+const TRACTION_ITERATIONS := 30
 
 
 static func rolling(yaw_rad: float, speed_m_s: float, centre := Vector3.ZERO) -> Dictionary:
@@ -90,6 +91,35 @@ static func advance(
 		"lateral_acceleration_m_s2": lateral_m_s2_sum / substeps,
 		"yaw_acceleration_rad_s2": (yaw_rate_rad_s - start_yaw_rate_rad_s) / delta_s,
 	}
+
+
+static func traction_limit_n(spec: VehicleSpec) -> float:
+	## The most the driven wheels pass on along the road accelerating straight: their axle's
+	## grip at the load that accelerating as hard moves onto or off it.
+	var wheelbase_m := spec.wheelbase_m()
+	var weight_n := spec.mass_kg * GRAVITY_M_S2
+	var front_static_n := weight_n * _behind_m(spec) / wheelbase_m
+	var rear_static_n := weight_n * _ahead_m(spec) / wheelbase_m
+	var transfer_per_n := spec.centre_of_gravity_height_m / wheelbase_m
+	var traction_n := 0.0
+	# The transfer is a fraction of the traction well below 1: this converges fast.
+	for iteration in TRACTION_ITERATIONS:
+		var front_load_n := maxf(
+			front_static_n - traction_n * transfer_per_n, weight_n * MIN_AXLE_LOAD_SHARE
+		)
+		var rear_load_n := maxf(
+			rear_static_n + traction_n * transfer_per_n, weight_n * MIN_AXLE_LOAD_SHARE
+		)
+		var front_grip_n := _axle_grip_n(spec, front_load_n, 0.0, front_static_n)
+		var rear_grip_n := _axle_grip_n(spec, rear_load_n, 0.0, rear_static_n)
+		match spec.driven_axle:
+			"front":
+				traction_n = front_grip_n
+			"rear":
+				traction_n = rear_grip_n
+			_:
+				traction_n = front_grip_n + rear_grip_n
+	return traction_n
 
 
 static func _rates(

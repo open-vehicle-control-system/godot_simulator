@@ -213,6 +213,38 @@ func test_a_steady_turns_lateral_acceleration_is_speed_times_yaw_rate() -> void:
 	assert_almost_eq(motion["yaw_acceleration_rad_s2"], 0.0, 0.01)
 
 
+func test_the_driven_axle_passes_on_its_grip_at_the_load_accelerating_leaves_on_it() -> void:
+	# Without load sensitivity an axle holds friction times its load, and accelerating at a
+	# moves m a h / L from the front axle to the rear one: F = mu (static load -+ F h / L).
+	var weight_n := 1350.0 * GRAVITY_M_S2
+	var transfer_per_n := 0.55 / WHEELBASE_M
+	var cases := {
+		"front": FRICTION * weight_n * 0.6 / (1.0 + FRICTION * transfer_per_n),
+		"rear": FRICTION * weight_n * 0.4 / (1.0 - FRICTION * transfer_per_n),
+		"all": FRICTION * weight_n,
+	}
+	for driven_axle in cases:
+		var spec := _spec()
+		spec.friction_load_sensitivity = 0.0
+		spec.driven_axle = driven_axle
+
+		var traction_n := DynamicBicycle.traction_limit_n(spec)
+
+		assert_almost_eq(traction_n, cases[driven_axle], 1.0, driven_axle)
+
+
+func test_load_sensitivity_lets_the_unloaded_front_axle_pass_on_a_little_more() -> void:
+	var sensitive := _spec()
+	var insensitive := _spec()
+	insensitive.friction_load_sensitivity = 0.0
+
+	var traction_n := DynamicBicycle.traction_limit_n(sensitive)
+
+	var insensitive_n := DynamicBicycle.traction_limit_n(insensitive)
+	assert_true(traction_n > insensitive_n, "%s > %s" % [traction_n, insensitive_n])
+	assert_true(traction_n < insensitive_n * 1.1, "%s" % traction_n)
+
+
 func _spec() -> VehicleSpec:
 	## A mid-size front-wheel drive sedan: 1350 kg, 60 % of it on the front axle.
 	var spec := VehicleSpec.new()

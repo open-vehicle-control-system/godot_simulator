@@ -61,6 +61,11 @@ for a vehicle; x, y, z up for a world.
     "cornering_stiffness_load_exponent": 0.7, "friction_load_sensitivity": 0.25,
     "tyre_shape": 1.3, "tyre_curvature": -1.5
   },
+  "powertrain": {
+    "motor": {"max_power_w": 80000.0, "max_torque_n_m": 254.0, "max_rpm": 10500.0},
+    "gear_ratios": [3.3, 1.944, 1.308, 0.971, 0.756], "final_drive_ratio": 3.389, "gear": 1,
+    "driveline_efficiency": 0.9, "rolling_resistance_coefficient": 0.011, "drag_area_m2": 0.67
+  },
   "body": {"size_m": [3.85, 1.62, 1.05], "centre_m": [0.0, 0.0, 0.85]},
   "driver_eye_m": [-0.178, 0.381, 1.106],
   "driver_pitch_deg": -2.82,
@@ -76,7 +81,7 @@ for a vehicle; x, y, z up for a world.
     },
     "rev_counter": {
       "node": "Cockpit_Rpm", "axis": [0.949, 0.0, -0.314],
-      "deg_per_rpm": 0.0495, "max_rpm": 6000, "motor_to_wheel_ratio": 8.19
+      "deg_per_rpm": 0.0495, "max_rpm": 6000
     },
     "steering_wheel": {
       "node": "Cockpit_Steer", "axis": [-0.965, 0.0, 0.264], "ratio": 16.2, "lock_deg": 507.0
@@ -114,9 +119,30 @@ for a vehicle; x, y, z up for a world.
   6° of slip at the rear and 10° at the front, the sedan understeers by about 2° per g
   (ISO 4138) and braking at 0.6 g in a 0.57 g turn tightens its line a little without a slide
   (ISO 7975).
+- `powertrain` is what drives the vehicle under `--keyboard` and what the rev counter reads
+  ([Driven by the keys](./architecture.md#driven-by-the-keys)); which axle it drives is
+  `dynamics.driven_axle`. Under OVCS the speed is OVCS's, and OVCS's simulated hardware has its
+  own motor-to-wheel ratio (for OVCS1, `Ovcs1.Simulation` in the OVCS repository): it must
+  match the selected gear times the final drive, or the rev counter and the speed OVCS
+  measures disagree. Sources for the values of the vehicles built here are in their builders
+  (`tools/default_vehicle.py`, `tools/pack_experiment.py`).
+
+  | Field | Meaning | Unit, range | Typical |
+  |---|---|---|---|
+  | `motor.max_power_w` | the motor's (or engine's) peak power | W, above 0 | 50 to 150 kW |
+  | `motor.max_torque_n_m` | its torque from standstill up to where its power takes over | N m, above 0 | 150 to 300 |
+  | `motor.max_rpm` | its rpm limit: it gives nothing at or beyond it | rpm, above 0 | 6000 to 7000 (petrol), 10,000 or more (electric) |
+  | `gear_ratios` | each gear's ratio, first gear first: motor turns per gearbox output turn | one or more, above 0 | |
+  | `final_drive_ratio` | the differential's ratio: gearbox output turns per wheel turn | above 0 | 3 to 4.5 |
+  | `gear` | the gear in use, from 1, or `"automatic"` for the gear that pushes hardest at the speed | a gear the gearbox has, or `"automatic"` | |
+  | `driveline_efficiency` | the share of the motor's torque the wheels get | above 0, at most 1 | 0.9 |
+  | `rolling_resistance_coefficient` | rolling resistance per unit of weight | above 0, below 1 | 0.010 to 0.015 |
+  | `drag_area_m2` | the drag coefficient times the frontal area | m², above 0 | 0.6 to 0.75 |
+
+  `--set=vehicle.powertrain.gear=3` runs a vehicle in another gear.
 - `body` is a box: the placeholder drawn when there is no `model`.
 - Lengths, the wheel radius, the stereo resolution, baseline and rate are positive, the
-  dynamics within the ranges above, the field of view under 180°, and the front axle ahead of the rear one;
+  dynamics and powertrain within the ranges above, the field of view under 180°, and the front axle ahead of the rear one;
   a pack that breaks this is refused.
 - `driver_pitch_deg` tilts the cockpit view up; negative looks down.
 - `stereo.mount_m` is midway between the two cameras; positive `pitch_deg` tilts them down. See
@@ -151,8 +177,8 @@ for a vehicle; x, y, z up for a world.
   steering wheel, as the vehicle steers left), from where the model draws it at zero.
   - `speedometer`: `km_h_to_deg` is the dial, two or more `[km/h, needle degrees]` marks in
     rising order; the needle goes straight between marks and stops at the dial's ends.
-  - `rev_counter` shows the motor's speed, the wheels' times `motor_to_wheel_ratio`, at
-    `deg_per_rpm` up to `max_rpm`.
+  - `rev_counter` shows the motor's speed, the wheels' times the gear in use and the final
+    drive of `powertrain`, at `deg_per_rpm` up to `max_rpm`.
   - `steering_wheel` turns by the front wheels' angle times `ratio`, up to `lock_deg` either
     way.
 - `mirrors` is optional: `material` is the glTF material of the `Body`'s mirror glass. Glass

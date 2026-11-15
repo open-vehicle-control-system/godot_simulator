@@ -658,7 +658,6 @@ def instruments(profile):
             "axis": ros(profile["rpm"]["axis"]),
             "deg_per_rpm": profile["rpm"]["deg_per_unit"],
             "max_rpm": profile["rpm"]["max"],
-            "motor_to_wheel_ratio": profile["motor_to_wheel_ratio"],
         }
     if "steering_wheel" in profile:
         pack["steering_wheel"] = {
@@ -680,17 +679,24 @@ def gltf_material_names(model):
 
 
 # What weighing and measuring each vehicle gives; vehicle_dynamics adds what is typical of road
-# cars. OVCS1 is a 2007 VW Polo 9N3 with a Nissan Leaf motor driving the front wheels, about
-# 1230 kg; its 48 % on the front axle is as the TASK-36 profile states it, unverified (a stock
-# Polo 9N3 carries about 62 %; the conversion's battery moves weight rearwards). It runs eco
-# tyres. The OVCS Mini is a 1:10 four-wheel drive chassis of 2.41 kg, scaled the same way.
+# cars. OVCS1 is a 2007 VW Polo 9N3 whose 1.4 TDI, fuel system and exhaust gave way to a Nissan
+# Leaf AZE0 motor and inverter driving the front wheels through the stock gearbox, and a battery
+# over the rear axle. Nothing of it is weighed: its mass, front weight share, centre of gravity
+# height and yaw inertia are estimates from its parts (the arithmetic is in TASK-39), to correct
+# with --set or here. Assumed: a 3-door Polo 9N3 1.4 TDI of 1089 kg kerb weight (75 kg driver
+# included), a 3-cylinder TDI with ancillaries of about 150 kg, a Leaf motor, inverter, mounts
+# and cooling of about 100 kg, and a battery of a Leaf 24 kWh pack's 48 modules (182 kg) in an
+# enclosure, about 260 kg, centred over the rear axle. The front share falls from a stock 9N's
+# 62 % to 48 %; the heavy parts at both ends raise the yaw inertia over a typical car's. It runs
+# eco tyres. The OVCS Mini is a 1:10 four-wheel drive chassis of 2.41 kg, scaled the same way.
 WEIGHED = {
     "ovcs1": {
-        "mass_kg": 1230.0,
+        "mass_kg": 1260.0,
         "front_weight_share": 0.48,
         "centre_of_gravity_height_m": 0.53,
         "driven_axle": "front",
         "friction": 0.9,
+        "yaw_inertia_per_mass_times_axle_distances": 1.0,
     },
     "ovcs_mini": {
         "mass_kg": 2.41,
@@ -699,6 +705,36 @@ WEIGHED = {
         "driven_axle": "all",
         "friction": 0.9,
     },
+}
+# OVCS1's motor is a Nissan Leaf AZE0's EM57: 80 kW, 254 Nm up to 3,008 rpm and 10,500 rpm at
+# most (Argonne National Laboratory's 2013 Leaf test summary). Its gearbox is taken as the
+# Polo 9N 1.4 TDI's 02R, code letters HGW (from 04.04), as VW's workshop manual gives it ("5-speed
+# manual gearbox 02R: code letters, allocation, gearbox ratios"); the code letters on OVCS1's
+# gearbox case would confirm it. It is kept in first gear. Its drag area is a 9N's Cd of 0.32
+# on an estimated 2.1 m2. The OVCS Mini's motor (Hobbywing Xerun AXE540 R2) is estimated, not
+# measured: the VMS's 20 A at an assumed 0.005 Nm/A and 7.4 V, an assumed 2,000 rpm/V; its
+# 11.82 is Traxxas's stock gearing, as OVCS drives it.
+POWERTRAINS = {
+    "ovcs1": vehicle_dynamics.powertrain(
+        max_power_w=80000.0,
+        max_torque_n_m=254.0,
+        max_rpm=10500.0,
+        gear_ratios=[3.3, 1.944, 1.308, 0.971, 0.756],
+        final_drive_ratio=3.389,
+        gear=1,
+        rolling_resistance_coefficient=0.011,
+        drag_area_m2=0.67,
+    ),
+    "ovcs_mini": vehicle_dynamics.powertrain(
+        max_power_w=150.0,
+        max_torque_n_m=0.1,
+        max_rpm=15000.0,
+        gear_ratios=[1.0],
+        final_drive_ratio=11.82,
+        gear=1,
+        rolling_resistance_coefficient=0.03,
+        drag_area_m2=0.01,
+    ),
 }
 
 
@@ -738,6 +774,7 @@ def vehicle_pack(experiment, vehicle_id, licence, attribution):
         "wheel_radius_m": profile["wheel_radius"],
         "wheel_width_m": profile["wheel_width"],
         "dynamics": dynamics(vehicle_id, front, rear),
+        "powertrain": POWERTRAINS[vehicle_id],
         "body": {"size_m": ros(body), "centre_m": ros(body_centre)},
         "driver_eye_m": ros(profile["driver_eye"]),
         "driver_pitch_deg": profile.get("driver_pitch_deg", 0.0),

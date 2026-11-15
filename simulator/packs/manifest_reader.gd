@@ -24,6 +24,11 @@ func has(path: String) -> bool:
 	return _lookup(path) != null
 
 
+func is_text(path: String) -> bool:
+	## True when the manifest holds a string at `path`.
+	return _lookup(path) is String
+
+
 func number(path: String) -> float:
 	## The number at `path`, or 0 after recording an error.
 	var found: Variant = _lookup(path)

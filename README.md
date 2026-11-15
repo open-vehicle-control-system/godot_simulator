@@ -79,7 +79,9 @@ only when its source is there).
 | `--timing` | print when the first frame was drawn and, every five seconds, the worst frame time, how many frames ran over 33 ms, a physics step's time, the GPU's time over all viewports and what was drawn |
 
 Keys: C cycles the views, V shows the stereo pair, F11 toggles full screen, Esc quits. Under
-`--keyboard` the arrow keys drive: Up accelerates, Down brakes then reverses, Left and Right steer.
+`--keyboard` the arrow keys drive: Up is full throttle through the vehicle's powertrain (its
+motor, gearbox and selected gear: `--set=vehicle.powertrain.gear=3` picks another), Down
+brakes then reverses, Left and Right steer.
 
 ## Checks
 

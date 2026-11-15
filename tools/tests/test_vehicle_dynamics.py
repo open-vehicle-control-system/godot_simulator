@@ -70,6 +70,50 @@ class RoadCarTest(unittest.TestCase):
     def test_the_brakes_favour_the_front(self):
         self.assertGreater(vehicle_dynamics.road_car(**SEDAN)["brake_bias_front"], 0.6)
 
+    def test_mass_over_the_axles_turns_harder(self):
+        fields = vehicle_dynamics.road_car(**SEDAN, yaw_inertia_per_mass_times_axle_distances=1.0)
+
+        self.assertAlmostEqual(fields["yaw_inertia_kg_m2"], 1350.0 * 1.2 * 1.8, delta=5.0)
+
+
+# What the simulator's PowertrainSpec requires under vehicle.powertrain.
+POWERTRAIN_REQUIRED = {
+    "motor",
+    "gear_ratios",
+    "final_drive_ratio",
+    "gear",
+    "driveline_efficiency",
+    "rolling_resistance_coefficient",
+    "drag_area_m2",
+}
+LEAF_THROUGH_A_POLO = {
+    "max_power_w": 80000.0,
+    "max_torque_n_m": 254.0,
+    "max_rpm": 10500.0,
+    "gear_ratios": [3.3, 1.944],
+    "final_drive_ratio": 3.389,
+    "gear": 1,
+    "rolling_resistance_coefficient": 0.011,
+    "drag_area_m2": 0.67,
+}
+
+
+class PowertrainTest(unittest.TestCase):
+    """A powertrain as a pack describes it."""
+
+    def test_has_every_field_a_pack_requires(self):
+        fields = vehicle_dynamics.powertrain(**LEAF_THROUGH_A_POLO)
+
+        self.assertEqual(set(fields), POWERTRAIN_REQUIRED)
+        self.assertEqual(
+            fields["motor"], {"max_power_w": 80000.0, "max_torque_n_m": 254.0, "max_rpm": 10500.0}
+        )
+
+    def test_a_manual_driveline_passes_on_about_nine_tenths(self):
+        fields = vehicle_dynamics.powertrain(**LEAF_THROUGH_A_POLO)
+
+        self.assertEqual(fields["driveline_efficiency"], 0.9)
+
 
 if __name__ == "__main__":
     unittest.main()

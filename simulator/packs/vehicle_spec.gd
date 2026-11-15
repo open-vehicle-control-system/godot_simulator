@@ -85,6 +85,7 @@ var body_centre: Vector3
 var driver_eye: Vector3
 var driver_pitch_deg: float
 var stereo := StereoOptics.new()
+var powertrain: PowertrainSpec
 var instruments: InstrumentsSpec = null  ## null when the pack has no `instruments`
 var mirrors: MirrorsSpec = null  ## null when the pack has no `mirrors`
 
@@ -122,6 +123,7 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 	var reader_within_vehicle := ManifestReader.new(
 		manifest["id"], vehicle_section if vehicle_section is Dictionary else {}, "vehicle."
 	)
+	spec.powertrain = PowertrainSpec.parse(reader_within_vehicle)
 	if reader.has("vehicle.instruments"):
 		spec.instruments = InstrumentsSpec.parse(reader_within_vehicle)
 	if reader.has("vehicle.mirrors"):

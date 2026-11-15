@@ -5,6 +5,13 @@ default_car_model.py from the source the builder is given; its dimensions are th
 and its dynamics those of a 1350 kg sedan with 60 % of its weight on the front axle
 (vehicle_dynamics.py).
 
+Its powertrain is a Volkswagen Bora 2.0's: the 2.0 l 8-valve petrol engine (85 kW at 5,200 rpm,
+170 Nm at 2,400 rpm: Wikipedia, "List of Volkswagen Group petrol engines"; its 6,200 rpm limit
+is an estimate) and the 02T five-speed gearbox, code letters GKM, as VW's workshop manual gives
+its ratios ("5-speed manual gearbox 02T: code letters, transmission ratios"). Its gear is
+automatic: no single gear takes a petrol car from standstill to its top speed. Its drag area is a
+mid-size sedan's Cd of 0.31 on 2.2 m2, estimated.
+
 Needs numpy and Pillow, and the source model (default_car_model.SOURCE).
 """
 
@@ -37,6 +44,16 @@ FRONT_WEIGHT_SHARE = 0.6
 CENTRE_OF_GRAVITY_HEIGHT_M = 0.55
 FRICTION = 1.0
 DRIVER_PITCH_DEG = -4.0
+POWERTRAIN = vehicle_dynamics.powertrain(
+    max_power_w=85000.0,
+    max_torque_n_m=170.0,
+    max_rpm=6200.0,
+    gear_ratios=[3.454, 1.954, 1.387, 1.025, 0.812],
+    final_drive_ratio=3.933,
+    gear="automatic",
+    rolling_resistance_coefficient=0.012,
+    drag_area_m2=0.68,
+)
 STEERING_RATIO = 15.0
 STEERING_LOCK_DEG = 520.0
 
@@ -78,6 +95,7 @@ def manifest(measured):
                 driven_axle="front",
                 friction=FRICTION,
             ),
+            "powertrain": POWERTRAIN,
             "body": {
                 "size_m": [millimetres(along) for along in measured["body_size_m"]],
                 "centre_m": [millimetres(along) for along in measured["body_centre_m"]],

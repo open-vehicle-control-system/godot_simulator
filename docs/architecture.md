@@ -22,11 +22,14 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `simulator_options.gd` | The command-line options |
 | `packs/pack_library.gd` | Finds packs on the search path by id |
 | `packs/vehicle_spec.gd`, `packs/track_spec.gd` | A pack's manifest, validated, in Godot's frames |
+| `packs/powertrain_spec.gd` | A vehicle's motor, gearbox and selected gear, validated |
 | `packs/instruments_spec.gd`, `packs/mirrors_spec.gd` | A vehicle's cockpit instruments and mirrors, validated |
 | `vehicle/vehicle_model.gd` | The vehicle's meshes, from its glTF or a placeholder |
 | `vehicle/dynamic_bicycle.gd` | The dynamic bicycle model: tyres that slip. Pure |
 | `vehicle/bicycle_model.gd` | The kinematic bicycle model, the slow limit of the dynamic one. Pure |
 | `vehicle/vehicle.gd` | The vehicle: follows the commanded speed and steering on the ground, keeps an odometer, reports its motion |
+| `vehicle/powertrain.gd` | The force the motor gives through the gear in use, drag and rolling resistance, the motor's speed. Pure |
+| `vehicle/keyboard_drive.gd`, `vehicle/keyboard_driver.gd` | Speed and steering from the arrow keys under `--keyboard` (pure), and the node that reads the keys |
 | `vehicle/instrument_scales.gd` | Needle and steering wheel angles from the pack's scales. Pure |
 | `vehicle/instruments.gd` | Turns the cockpit's needles and steering wheel as the vehicle moves |
 | `vehicle/mirrors.gd`, `vehicle/mirror.gdshader` | The mirrors: a view looking back per piece of mirror glass |
@@ -113,8 +116,8 @@ The state OVCS reads is the origin's: the speed along the heading, the lateral v
 rate from the model, and what an IMU there reads, the model's lateral acceleration (plus the yaw
 acceleration's share at the origin) and gravity's reaction. The odometer counts the part of each
 move along the heading: what the wheels roll. There is no longitudinal tyre slip (the speed is
-OVCS's), no suspension dynamics (load moves across at once) and no aerodynamics; a
-vehicle moved by its own forces is OVCS's TASK-81.
+OVCS's), no suspension dynamics (load moves across at once) and no aerodynamics but the drag that
+holds back keyboard driving; a vehicle moved by its own forces is OVCS's TASK-81.
 
 The vehicle does not pass through what it hits. Before every move its body box (raised off the
 ground so kerbs never reach it) is swept along the move; if the track's collision is in
@@ -127,6 +130,28 @@ of its own (`CollisionLayers`) that the wheels' rays see and the sweep does not,
 bank reaching the box never stops it. A sweep ignores what the box is already into, so that is
 asked first: a body into an obstacle moves freely away from it, to back off or turn away, and
 not at all further into it.
+
+### Driven by the keys
+
+Under `--keyboard` the speed command comes from the vehicle's powertrain, its pack's
+`vehicle.powertrain` (`Powertrain`). Up is full throttle: the motor gives its full torque
+up to the speed where its power takes over, then its power, through the gear in use, the final
+drive and the driveline's efficiency, and nothing at its rpm limit; the driven axle passes on at
+most its grip at the load accelerating leaves on it (`DynamicBicycle.traction_limit_n`), so
+the friction circle is never asked for more than the axle holds going straight. Drag and
+rolling resistance take their share, and the motor, gearbox and wheels spinning up add to the
+mass the motor moves (Gillespie's 1.04 + 0.0025 × overall ratio²). The top speed is where the rpm
+limit or the balance of power and drag stops it. With no key the vehicle coasts, slowed by drag
+and rolling alone; Down brakes at 8 m/s² and reverses at 3 m/s² up to 4 m/s. A selected gear
+stays whatever the speed; `"automatic"` takes the gear that pushes hardest at the speed, the
+highest of those that push as hard. There is no clutch, no shift time and no torque curve but
+the flat torque and power.
+
+Under OVCS the speed is OVCS's: the powertrain only shapes keyboard driving and the rev counter.
+OVCS's own simulated hardware has its own motor-to-wheel ratio (for OVCS1,
+`Ovcs1.Simulation` in the OVCS repository); it must match the selected gear's overall ratio
+(gear × final drive), or the cockpit's rev counter and the speed OVCS measures from the motor
+disagree with each other.
 
 ## Physics
 
@@ -264,7 +289,8 @@ What moves in the cockpit comes from the vehicle pack ([Pack format](./pack_form
 which nodes of the model are the needles and the steering wheel, their axes and scales, and
 which material is mirror glass. They show the vehicle's own state (its speed and steering), so
 they read the same driven by OVCS, by the keys or by `--hold`; the rev counter shows the motor
-speed that the wheels' speed implies through the pack's gear ratio.
+speed that the wheels' speed implies through the gear in use and the final drive of the pack's
+`powertrain`.
 
 Each mirror is a small view of the world from its glass, looking back. They are rendered only
 in the cockpit view, lit as the world without tone mapping, glow or ambient occlusion, which
