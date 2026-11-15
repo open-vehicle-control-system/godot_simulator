@@ -55,7 +55,7 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `world/instance_batch.gd` | Copies of one mesh about a centre, filled on any thread, drawn and culled together |
 | `world/sky_sun.gd` | Finds the sun in a panorama. Pure |
 | `view/screenshot.gd` | Saves the window and reports what the window and the other viewports cost to render |
-| `view/upscaling.gd` | Draws the window smaller and upscales it with FSR 2 (`--upscale`) |
+| `view/upscaling.gd` | Draws the window smaller and upscales it with FSR 2: as `--upscale` asks, and always above 2560 × 1440, following the window's size |
 | `view/frame_times.gd` | Reports when the first frame was drawn, the worst frame times after it, a physics step's time, the GPU's time over all viewports and what was drawn (`--timing`) |
 | `link/link_protocol.gd` | The link's packets and the Godot ↔ ROS frames. Pure |
 | `link/simulator_link.gd` | The link's TCP client |

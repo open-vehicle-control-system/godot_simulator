@@ -28,7 +28,9 @@ extends RefCounted
 ##   --eye=X,Y,Z             look at the vehicle from this fixed point of the track's frame
 ##   --screenshot=FILE       save the window as a PNG once the world has rendered, then quit
 ##   --upscale=LEVEL         draw the window smaller and upscale it with FSR 2: quality,
-##                           balanced or performance; the stereo cameras are not upscaled
+##                           balanced or performance, or native for every pixel; a window over
+##                           2560 x 1440 is always drawn at that and upscaled unless native;
+##                           the stereo cameras are not upscaled
 ##   --set=PATH=VALUE        override a field of the vehicle's or the track's pack.json for this
 ##                           run, before the pack is checked: PATH from `vehicle.` or `track.`
 ##                           (`--set=vehicle.dynamics.brake_bias_front=0.65`), VALUE as JSON;
@@ -64,7 +66,7 @@ var spawn_yaw_deg := 0.0
 var eye_given := false
 var eye_position_m := Vector3.ZERO  ## the track's ROS frame: x, y, z up
 var screenshot_path := ""
-var upscale := ""  ## a level of Upscaling.SCALES, or "" for none
+var upscale := ""  ## a level of Upscaling.levels(), or "" for the cap on large windows alone
 var timing := false
 var pack_settings: Array = []  ## [path, value] pairs, in the order given
 
@@ -172,7 +174,7 @@ func _read_pack_setting(setting: String) -> String:
 
 
 func _read_choice(option: String, choice: String) -> String:
-	var choices: Array = ViewPoses.VIEWS if option == "--camera" else Upscaling.SCALES.keys()
+	var choices: Array = ViewPoses.VIEWS if option == "--camera" else Upscaling.levels()
 	if not choice in choices:
 		return "%s is one of %s" % [option, ", ".join(choices)]
 	if option == "--camera":

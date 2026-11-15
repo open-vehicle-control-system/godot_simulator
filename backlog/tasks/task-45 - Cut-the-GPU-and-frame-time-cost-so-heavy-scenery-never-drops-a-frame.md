@@ -4,7 +4,7 @@ title: Cut the GPU and frame-time cost so heavy scenery never drops a frame
 status: To Do
 assignee: []
 created_date: '2026-11-15 17:50'
-updated_date: '2026-11-15 18:20'
+updated_date: '2026-11-15 18:28'
 labels:
   - performance
   - rendering
@@ -40,4 +40,6 @@ The stereo pair's images and ground truth must not change (rendered tests), and 
 Godot 4.7.2 (from 4.6.3), same Spa lap at 120 km/h, warm caches, two runs each: GPU 8.4-12.1 ms a frame (4.6.3: 11.9-12.4), fewer primitives at the same places (4.2 M vs 4.9 M at the start) with the image unchanged (spawn screenshot: mean difference 0.24 of 255, 0.15 % of pixels visibly, at the car's paint and shadow edge); the other viewports 5.0 ms (6.1). Worst frames unchanged, 17-23 ms: the spikes are not the GPU's.
 
 Full screen on a 5K screen (5120x2880) at the Raidillon (from Eau Rouge, spawn -666.9,85.2,51.5,44.1, 50 km/h): native GPU 19.7-20.4 ms, 46 fps, worst frames 27-35 ms; --upscale=performance GPU 11.8-12.1 ms, 60 fps, worst 22-28 ms; 6,100-6,500 draw calls there. Below 60 fps the window judders: physics steps at 60 Hz without interpolation, so frames show one or two steps. To do here: cap the window's 3D resolution (scale it, FSR, when the window is larger than about 1440p) by default; physics interpolation for the window's views only (the stereo pair keeps exact physics poses); the HUD shows the worst frame, not only the mean fps.
+
+Done in this task: the window's 3D is drawn with at most 2560 x 1440 pixels and upscaled with FSR 2 beyond (Upscaling follows the window's size; --upscale=native for every pixel). Full screen on 5K at the Raidillon, no option: GPU 11.7-12.0 ms, 60 fps (was 19.7-20.4 ms, 46 fps).
 <!-- SECTION:NOTES:END -->

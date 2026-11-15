@@ -98,8 +98,9 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 	viewer.keyboard_driving = options.keyboard
 	viewer.holding_drive = options.hold_given
 	viewer.lighting = TrackWorld.window_lighting(lighting["environment"], track)
-	if options.upscale != "":
-		Upscaling.apply(get_viewport(), options.upscale)
+	var upscaling := Upscaling.new()
+	add_child(upscaling)
+	upscaling.setup(get_window(), options.upscale)
 	add_child(viewer)
 	viewer.setup(vehicle, link, stereo, "%s  |  %s" % [spec.name, track.name], options.view)
 	viewer.show_stereo(options.show_stereo)
