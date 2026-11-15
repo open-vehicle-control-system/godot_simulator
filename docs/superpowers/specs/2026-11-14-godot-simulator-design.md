@@ -11,7 +11,7 @@ apart from the simulator.
 
 The one exception is a pair of bundled defaults, so a clean clone runs with one command: a
 small test circuit and a mid-size sedan, built by `tools/default_packs.py` and committed as
-built in `simulator/default_packs/`. The track is generated from code alone, CC0; the car's
+built in `simulator/default_packs/`. The track is generated from code, its trees and sky from Poly Haven's CC0 models and HDRI; the car's
 model is the one exception to generated, CC0 content: "Generic Sedan Car" by Márcio Meireles
 (MMC Works), CC BY 4.0, credited with its modifications in the pack.
 

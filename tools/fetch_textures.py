@@ -8,6 +8,7 @@ convention) and _rough.jpg at 2K, with OUT_DIR/<asset>.source.txt naming where i
 set already in OUT_DIR is kept.
 """
 
+import hashlib
 import io
 import json
 import sys
@@ -26,6 +27,27 @@ def download(url):
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request, timeout=120) as response:
         return response.read()
+
+
+def md5(path):
+    """Return a file's MD5, as Poly Haven lists its files'."""
+    digest = hashlib.md5(usedforsecurity=False)
+    with path.open("rb") as file:
+        for block in iter(lambda: file.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def fetch_file(url, expected_md5, path):
+    """Return `path` holding the file at `url`, downloaded unless it is there; checked by MD5."""
+    if path.exists() and md5(path) == expected_md5:
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(download(url))
+    if md5(path) != expected_md5:
+        raise ValueError(f"{path}: MD5 {md5(path)} from {url}, expected {expected_md5}")
+    print(f"{path}: {url}")
+    return path
 
 
 def polyhaven_set(asset):

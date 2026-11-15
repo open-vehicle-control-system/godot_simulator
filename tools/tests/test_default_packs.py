@@ -24,8 +24,10 @@ import default_car_model
 import default_packs
 import default_track
 import default_vehicle
+import hdr_sky
 import smooth_terrain
 import track_surfaces
+import tree_impostors
 
 SCRATCH = default_packs.REPOSITORY / "build" / "test_default_packs"
 NO_CAR_SOURCE = (
@@ -121,6 +123,26 @@ class BuiltPacks(unittest.TestCase):
                 self.assertIn(self.track / f"{textures}_{suffix}.dds", compressed)
         for impostor in track["trees"]["impostors"]:
             self.assertIn(self.track / impostor["atlas"], compressed)
+
+    def test_the_sky_is_poly_havens_at_2k_with_the_sun_where_its_is(self):
+        track = self.manifest["track"]
+        sky = hdr_sky.read(self.track / track["sky"])
+
+        self.assertEqual(sky.shape[:2], (1024, 2048))
+        self.assertAlmostEqual(
+            track["sun"]["elevation_deg"], hdr_sky.sun_elevation_deg(sky), delta=0.05
+        )
+        self.assertIn(default_track.SKY_CREDIT, self.manifest["attribution"])
+
+    def test_the_trees_are_poly_havens_impostors_credited(self):
+        impostors = self.manifest["track"]["trees"]["impostors"]
+
+        self.assertEqual(
+            {impostor["atlas"] for impostor in impostors},
+            {f"trees/{variant}.dds" for variant in tree_impostors.VARIANTS},
+        )
+        self.assertEqual({impostor["kind"] for impostor in impostors}, {"conifer", "broadleaf"})
+        self.assertIn(tree_impostors.CREDIT, self.manifest["attribution"])
 
     def test_the_ground_layers_share_one_size(self):
         sides = set()

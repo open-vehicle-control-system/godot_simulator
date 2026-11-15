@@ -1,4 +1,4 @@
-"""Draw texture sets and tree impostor atlases from code alone, for the default track.
+"""Draw texture sets from code alone, for the default track.
 
 Every image is drawn from a fixed seed, so two runs draw the same pixels, and tiles: its
 noise is periodic (filtered white noise in the frequency domain) and its patterns repeat a
@@ -8,16 +8,10 @@ convention: green up the image) and a roughness map, as docs/pack_format.md asks
 Needs numpy and Pillow.
 """
 
-import math
-
 import ground_classes
 import numpy as np
-from PIL import Image, ImageDraw
 
 KINDS = ("grass", "gravel", "asphalt", "plaster", "brick", "clay_tiles", "metal_sheet")
-TREE_KINDS = ("broadleaf", "conifer")
-TREE_VIEWS = 3
-TREE_SUPERSAMPLING = 3
 
 
 def periodic_noise(side_px, wavelength_px, seed):
@@ -192,85 +186,3 @@ def texture_set(kind, side_px):
 
 
 # ------------------------------------------------------------------------------------ trees
-def _broadleaf_crown(rng):
-    """Return leaf clusters (x, y, z up, radius) of a broadleaf tree 10 m tall."""
-    count = 160
-    theta = rng.uniform(0.0, math.tau, count)
-    up = rng.uniform(-1.0, 1.0, count)
-    reach = rng.uniform(0.55, 1.0, count) ** 0.5
-    radius_m = 3.6
-    x = np.cos(theta) * np.sqrt(1.0 - up**2) * reach * radius_m
-    y = np.sin(theta) * np.sqrt(1.0 - up**2) * reach * radius_m
-    z = 6.2 + up * reach * 3.4
-    return np.stack([x, y, z, rng.uniform(0.6, 1.1, count)], -1)
-
-
-def _conifer_crown(rng):
-    """Return needle clusters (x, y, z up, radius) of a conifer 14 m tall."""
-    count = 220
-    z = rng.uniform(1.5, 13.6, count)
-    reach = (14.0 - z) / 12.5 * 2.6 * rng.uniform(0.55, 1.0, count)
-    theta = rng.uniform(0.0, math.tau, count)
-    return np.stack(
-        [np.cos(theta) * reach, np.sin(theta) * reach, z, rng.uniform(0.45, 0.8, count)], -1
-    )
-
-
-TREES = {
-    # crown, width and height of a view in metres, a view's pixels, trunk height and colours
-    "broadleaf": (
-        _broadleaf_crown,
-        10.0,
-        10.0,
-        (200, 200),
-        3.6,
-        (0.03, 0.065, 0.018),
-        (0.1, 0.16, 0.045),
-    ),
-    "conifer": (_conifer_crown, 6.0, 14.0, (96, 224), 1.8, (0.02, 0.06, 0.03), (0.07, 0.14, 0.06)),
-}
-
-
-def tree_atlas(kind):
-    """Return a tree's impostor atlas (RGBA, `TREE_VIEWS` views side by side), width and height.
-
-    View k shows the tree seen across the card turned k / TREE_VIEWS of half a turn, lit from
-    above and from the left.
-    """
-    crown, width_m, height_m, (view_px, height_px), trunk_m, dark, light = TREES[kind]
-    clusters = crown(np.random.default_rng(81 + TREE_KINDS.index(kind)))
-    scale = TREE_SUPERSAMPLING
-    views = []
-    for view in range(TREE_VIEWS):
-        angle = math.pi * view / TREE_VIEWS
-        across = clusters[:, 0] * math.cos(angle) + clusters[:, 1] * math.sin(angle)
-        depth = -clusters[:, 0] * math.sin(angle) + clusters[:, 1] * math.cos(angle)
-        image = Image.new("RGBA", (view_px * scale, height_px * scale), (0, 0, 0, 0))
-        pen = ImageDraw.Draw(image)
-        px_per_m = view_px * scale / width_m
-        trunk_half = 0.16 * px_per_m
-        middle = view_px * scale / 2.0
-        bottom = height_px * scale
-        pen.rectangle(
-            [middle - trunk_half, bottom - (trunk_m + 1.0) * px_per_m, middle + trunk_half, bottom],
-            fill=(54, 42, 32, 255),
-        )
-        for index in np.argsort(-depth):
-            x, z, radius = across[index], clusters[index, 2], clusters[index, 3]
-            lit = 0.5 + 0.25 * (z - 6.0) / 4.0 - 0.15 * x / 4.0 - 0.15 * depth[index] / 4.0
-            colour = _albedo(np.array(_mix(dark, light, np.array(lit))))
-            centre = (middle + x * px_per_m, bottom - z * px_per_m)
-            r = radius * px_per_m
-            pen.ellipse(
-                [centre[0] - r, centre[1] - r, centre[0] + r, centre[1] + r], fill=(*colour, 255)
-            )
-        views.append(image.resize((view_px, height_px), Image.Resampling.LANCZOS))
-    atlas = Image.new("RGBA", (view_px * TREE_VIEWS, height_px))
-    for view, image in enumerate(views):
-        atlas.paste(image, (view * view_px, 0))
-    pixels = np.asarray(atlas).copy()
-    opaque = pixels[..., 3] > 127
-    pixels[..., 3] = np.where(opaque, 255, 0)
-    # The clear pixels take the leaves' colour, so mipmaps do not darken the crown's rim.
-    pixels[~opaque, :3] = pixels[opaque, :3].mean(0).astype(np.uint8)
-    return pixels, width_m, height_m

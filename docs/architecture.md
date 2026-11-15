@@ -319,7 +319,7 @@ runtime: see [Pack format](./pack_format.md).
 
 The simulator bundles two packs in `simulator/default_packs/` (a `.gdignore` keeps Godot from
 importing them): `default_track` and `default_car`, built by `tools/default_packs.py`: the
-track from code, CC0; the car from "Generic Sedan Car" by Márcio Meireles, CC BY 4.0, credited
+track from code, its trees and sky from Poly Haven's, CC0; the car from "Generic Sedan Car" by Márcio Meireles, CC BY 4.0, credited
 in its pack. `main.gd` searches that directory last, and
 `SimulatorOptions` selects them when `--track` or `--vehicle` is left out; nothing else in
 the simulator knows them.

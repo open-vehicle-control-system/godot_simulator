@@ -7,15 +7,20 @@ ridge against the sky. It goes through the real tracks' builders: the road map, 
 and kerbs of track_surfaces.py, the closed buildings of buildings.py, the sign faces of
 sign_faces.py and the tiles of track_tiles.py. Where a real track has an orthophoto, this
 one draws its own (the albedo of each surface, with broad variation and mowing stripes),
-graded as the identity; its texture sets and tree atlases are procedural_textures.py's.
-Every random choice comes from a fixed seed, so two builds are the same.
+graded as the identity; its texture sets are procedural_textures.py's. Its trees are the real
+tracks' impostors of Poly Haven's CC0 tree models (tree_impostors.py renders them), and its sky
+Poly Haven's CC0 kloofendal_48d_partly_cloudy_puresky at 2K, downloaded once to build/polyhaven
+and checked by MD5, the sun where the panorama's is. Every random choice comes from a fixed
+seed, so two builds are the same.
 
-Needs numpy and Pillow.
+Needs numpy and Pillow, and network access the first time.
 """
 
 import math
+import shutil
 
 import buildings
+import fetch_textures
 import footprints
 import ground_classes
 import numpy as np
@@ -25,6 +30,7 @@ import sign_faces
 import smooth_terrain
 import track_surfaces
 import track_tiles
+import tree_impostors
 from PIL import Image
 
 TRACK_ID = "default_track"
@@ -161,7 +167,14 @@ SIGNS = (
 )
 SIGN_LOWER_EDGE_M = 1.0
 POST_DIAMETER_M = 0.076
-SUN = {"azimuth_deg": 135.0, "elevation_deg": 42.0}
+SKY_ASSET = "kloofendal_48d_partly_cloudy_puresky"
+SKY_URL = f"https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/{SKY_ASSET}_2k.hdr"
+SKY_MD5 = "2eba3a4d7eeb23cbfbeca364c97e7980"
+SKY_CREDIT = f"Poly Haven (https://polyhaven.com/a/{SKY_ASSET}): sky {SKY_ASSET}, 2K, CC0"
+# The sun stands as high as the sky's brightest spot (hdr_sky.sun_elevation_deg).
+SUN = {"azimuth_deg": 135.0, "elevation_deg": 47.9}
+# An impostor view's width in the pack: the conifers stand in the woods, the broadleaf alone.
+TREE_CARD_PX = {"conifer": 256, "broadleaf": 512}
 VISIBILITY_M = 12000.0
 
 
@@ -584,29 +597,45 @@ def write_textures(directory, work):
             source = work / f"{name}_{suffix}.png"
             Image.fromarray(image).save(source)
             jobs.append((kinds[suffix], source, directory / f"{texture_path(name)}_{suffix}.dds"))
-    for kind in procedural_textures.TREE_KINDS:
-        atlas, _, _ = procedural_textures.tree_atlas(kind)
-        source = work / f"tree_{kind}.png"
-        Image.fromarray(atlas, "RGBA").save(source)
-        jobs.append(("colour", source, directory / "trees" / f"{kind}.dds"))
+    for variant, (_, kind, _, _) in tree_impostors.VARIANTS.items():
+        source = work / "trees" / f"{variant}.png"
+        write_tree_atlas(tree_impostors.atlas_path(variant), source, TREE_CARD_PX[kind])
+        jobs.append(("colour", source, directory / "trees" / f"{variant}.dds"))
     return jobs
+
+
+def write_tree_atlas(rendered, source, card_px):
+    """Write a rendered atlas downsized to `card_px` a view, when it has been rendered.
+
+    The pack holds only its DDS, so a build that is not compressed needs no render.
+    """
+    if not rendered.exists():
+        return
+    source.parent.mkdir(parents=True, exist_ok=True)
+    with Image.open(rendered) as atlas:
+        scale = card_px * tree_impostors.VIEWS / atlas.width
+        size = (card_px * tree_impostors.VIEWS, round(atlas.height * scale))
+        atlas.resize(size, Image.Resampling.LANCZOS).save(source)
 
 
 def impostors():
     """Return the track's `trees.impostors`."""
-    found = []
-    for kind in procedural_textures.TREE_KINDS:
-        atlas, width_m, height_m = procedural_textures.tree_atlas(kind)
-        found.append(
-            {
-                "atlas": f"trees/{kind}.dds",
-                "views": procedural_textures.TREE_VIEWS,
-                "width_m": width_m,
-                "height_m": height_m,
-                "kind": kind,
-            }
-        )
-    return found
+    return [
+        {
+            "atlas": f"trees/{variant}.dds",
+            "views": tree_impostors.VIEWS,
+            "width_m": width_m,
+            "height_m": height_m,
+            "kind": kind,
+        }
+        for variant, (_, kind, width_m, height_m) in tree_impostors.VARIANTS.items()
+    ]
+
+
+def write_sky(directory, cache=tree_impostors.CACHE):
+    """Write the sky into the pack, downloading it first unless it is in `cache`."""
+    sky = fetch_textures.fetch_file(SKY_URL, SKY_MD5, cache / f"{SKY_ASSET}_2k.hdr")
+    shutil.copyfile(sky, directory / "sky.hdr")
 
 
 def manifest(sections, terrain, length_m, sign_codes):
@@ -623,13 +652,16 @@ def manifest(sections, terrain, length_m, sign_codes):
         "version": "0.1.0",
         "licence": "CC0-1.0",
         "attribution": [
-            "Generated from code by tools/default_packs.py: terrain, lap, surfaces, textures, "
-            "trees and buildings, CC0",
+            "Generated from code by tools/default_packs.py: terrain, lap, surfaces, textures "
+            "and buildings, CC0",
+            tree_impostors.CREDIT,
+            SKY_CREDIT,
             sign_faces.SOURCE,
         ],
         "track": {
             "tiles": "tiles.json",
             "far": {"scene": "far.glb", "photo": "far.jpg"},
+            "sky": "sky.hdr",
             "sun": SUN,
             "haze": {"visibility_m": VISIBILITY_M},
             "spawn": {
@@ -740,4 +772,5 @@ def write(directory, work):
     if homeless:
         raise ValueError(f"default track: {homeless} trees or signs stand on no tile")
     jobs = write_textures(directory, work)
+    write_sky(directory)
     return manifest(sections, terrain, length_m, codes), jobs

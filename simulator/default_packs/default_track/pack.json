@@ -6,7 +6,9 @@
   "version": "0.1.0",
   "licence": "CC0-1.0",
   "attribution": [
-    "Generated from code by tools/default_packs.py: terrain, lap, surfaces, textures, trees and buildings, CC0",
+    "Generated from code by tools/default_packs.py: terrain, lap, surfaces, textures and buildings, CC0",
+    "Poly Haven (https://polyhaven.com): models fir_tree_01, pine_tree_01 and jacaranda_tree by Rico Cilliers and Rob Tuytel, drawn as impostors rendered from them, CC0",
+    "Poly Haven (https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky): sky kloofendal_48d_partly_cloudy_puresky, 2K, CC0",
     "Road sign faces: drawn by the pack's builder (tools/sign_faces.py) after the designs of the Belgian highway code (arr\u00eat\u00e9 royal of 1 December 1975), CC0"
   ],
   "track": {
@@ -15,9 +17,10 @@
       "scene": "far.glb",
       "photo": "far.jpg"
     },
+    "sky": "sky.hdr",
     "sun": {
       "azimuth_deg": 135.0,
-      "elevation_deg": 42.0
+      "elevation_deg": 47.9
     },
     "haze": {
       "visibility_m": 12000.0
@@ -160,18 +163,53 @@
     "trees": {
       "impostors": [
         {
-          "atlas": "trees/broadleaf.dds",
+          "atlas": "trees/fir_tree_01_a.dds",
           "views": 3,
-          "width_m": 10.0,
-          "height_m": 10.0,
-          "kind": "broadleaf"
+          "width_m": 7.33,
+          "height_m": 18.93,
+          "kind": "conifer"
         },
         {
-          "atlas": "trees/conifer.dds",
+          "atlas": "trees/fir_tree_01_b.dds",
           "views": 3,
-          "width_m": 6.0,
-          "height_m": 14.0,
+          "width_m": 6.61,
+          "height_m": 14.06,
           "kind": "conifer"
+        },
+        {
+          "atlas": "trees/fir_tree_01_c.dds",
+          "views": 3,
+          "width_m": 6.94,
+          "height_m": 14.52,
+          "kind": "conifer"
+        },
+        {
+          "atlas": "trees/pine_tree_01_a.dds",
+          "views": 3,
+          "width_m": 9.01,
+          "height_m": 20.37,
+          "kind": "conifer"
+        },
+        {
+          "atlas": "trees/pine_tree_01_b.dds",
+          "views": 3,
+          "width_m": 8.39,
+          "height_m": 14.88,
+          "kind": "conifer"
+        },
+        {
+          "atlas": "trees/pine_tree_01_c.dds",
+          "views": 3,
+          "width_m": 8.76,
+          "height_m": 17.54,
+          "kind": "conifer"
+        },
+        {
+          "atlas": "trees/jacaranda_tree.dds",
+          "views": 3,
+          "width_m": 24.83,
+          "height_m": 19.47,
+          "kind": "broadleaf"
         }
       ]
     },

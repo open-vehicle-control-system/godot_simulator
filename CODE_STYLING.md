@@ -11,7 +11,8 @@ claim) is in [CLAUDE.md](./CLAUDE.md#development-process).
 - **The simulator ships no third-party content.** `simulator/` works for any track and
   vehicle and takes what differs from the pack: geometry, optics, spawn pose, surfaces. Its
   only bundled packs are the defaults in `simulator/default_packs/`, built by
-  `tools/default_packs.py`: CC0 and generated from code, but for one exception, the default
+  `tools/default_packs.py`: CC0 (generated from code, the track's trees and sky from Poly Haven's
+  CC0 assets), but for one exception, the default
   car's model ("Generic Sedan Car", CC BY 4.0, credited in its pack); otherwise a track or vehicle appears in the simulator only
   as a test pack, and their ids only as `SimulatorOptions`' defaults.
 - **Packs are data.** A pack is a directory with a `pack.json` and the files it names; see

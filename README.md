@@ -9,7 +9,7 @@ exception is `--keyboard`, which drives with the arrow keys so a track can be lo
 without OVCS.
 Tracks and vehicles are **packs**, loaded at runtime and released apart from the simulator,
 each under its own licence. The simulator bundles only two: a small test circuit
-(`default_track`, generated from code, CC0) and a mid-size sedan (`default_car`, whose model is
+(`default_track`, generated from code with Poly Haven's trees and sky, CC0) and a mid-size sedan (`default_car`, whose model is
 "Generic Sedan Car" by Márcio Meireles, CC BY 4.0: see [Licences and credits](#licences-and-credits)).
 
 ## Run
@@ -29,7 +29,9 @@ Other packs are selected by id from a directory of packs:
 
 The default packs live in `simulator/default_packs/`, committed as built; the simulator always
 searches it, last. They are built by `python3 tools/default_packs.py` (Godot compresses their
-textures): the track from code alone, from fixed seeds; the car from its source model, which is
+textures): the track from code, from fixed seeds, with Poly Haven's tree models rendered into
+impostors (once, by Blender: set `BLENDER_PYTHON` to a Python with `bpy`) and its sky downloaded
+once, both checked by MD5; the car from its source model, which is
 not in the repository (download it to `build/sedan_src/small.glb`, as
 `tools/default_car_model.py` says; without it the car is left as committed). Rebuild them after
 changing their builder; the tools' tests check the committed files are the builder's (the car's
@@ -88,7 +90,10 @@ The simulator's code is MIT ([LICENCE.txt](./LICENCE.txt)). Every pack states it
 and credits in its `pack.json` `attribution`, with a `LICENCE.txt` beside it.
 
 - **Bundled default packs** (`simulator/default_packs/`), built by `tools/default_packs.py`:
-  - `default_track`: generated from code, dedicated to the public domain (CC0 1.0).
+  - `default_track`: generated from code, dedicated to the public domain (CC0 1.0). Its trees
+    are impostors rendered from Poly Haven's fir_tree_01, pine_tree_01 and jacaranda_tree
+    (Rico Cilliers and Rob Tuytel, https://polyhaven.com, CC0) and its sky is Poly Haven's
+    kloofendal_48d_partly_cloudy_puresky at 2K (Greg Zaal and Jarod Guest, CC0).
   - `default_car`: CC BY 4.0, because of its model: "Generic Sedan Car" by Márcio Meireles
     (MMC Works),
     https://sketchfab.com/3d-models/generic-sedan-car-58c33766470d46e7b2aed542650494e5,

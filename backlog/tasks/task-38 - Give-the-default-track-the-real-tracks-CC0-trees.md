@@ -1,10 +1,10 @@
 ---
 id: TASK-38
 title: Give the default track the real tracks' CC0 trees and sky
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-15 09:35'
-updated_date: '2026-11-15 09:50'
+updated_date: '2026-11-15 10:53'
 labels: []
 dependencies:
   - TASK-36
@@ -19,14 +19,18 @@ default_track's procedural trees look cartoonish. Use the CC0 Poly Haven trees t
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 default_track's trees are the Poly Haven fir, pine and broadleaf impostors, credited in attribution
-- [ ] #2 A fresh build of the default packs matches the committed files; the pack stays small
-- [ ] #3 Before/after captures of the default track's woods
-- [ ] #4 default_track's sky is the Poly Haven partly cloudy HDRI at 2K, credited, with the sun matched to it
+- [x] #1 default_track's trees are the Poly Haven fir, pine and broadleaf impostors, credited in attribution
+- [x] #2 A fresh build of the default packs matches the committed files; the pack stays small
+- [x] #3 Before/after captures of the default track's woods
+- [x] #4 default_track's sky is the Poly Haven partly cloudy HDRI at 2K, credited, with the sun matched to it
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Also the sky: the CC0 Poly Haven HDRI kloofendal_48d_partly_cloudy_puresky (the real tracks use it as sky.hdr), at 2K rather than 4K to keep the embedded pack small, fetched reproducibly by the builder and credited to Poly Haven (CC0); sun direction matched to the HDRI as the real packs do.
+
+Trees: tools/tree_impostors.py downloads Poly Haven's 1K .blend models (fir_tree_01, pine_tree_01, jacaranda_tree; MD5s pinned, textures checked against the API's MD5s) to build/polyhaven/models (1.1 GB, once) and renders the seven variants with tools/render_tree_impostors.py under BLENDER_PYTHON (Blender 4.2, Cycles CPU, 48 samples, seed 0, no adaptive sampling): the experiment's make_tree_impostors.py method, 512 px a view, about 2 minutes. A second render of fir_tree_01_a was bit-identical. The 1K models frame the conifers about 6 % narrower than the experiment's atlases (fir_a 7.33 m against 7.76 m wide, same heights); VARIANTS holds the rendered sizes and render() checks them. default_track downsizes the atlases to 256 px a view (conifers) and 512 (jacaranda) before DDS; the DDS are compression outputs, so the determinism test needs no render.
+Sky: Poly Haven kloofendal_48d_partly_cloudy_puresky 2K .hdr (5.2 MB, MD5 pinned), downloaded once to build/polyhaven; sun elevation 47.9 deg, the panorama's brightest pixel (tools/hdr_sky.py; tested against the file); azimuth kept at 135 deg (the simulator turns the sky's sun there).
+Pack: default_track 16 MB (sky 5.2 MB, trees 4.1 MB, was 6.7 MB).
 <!-- SECTION:NOTES:END -->
