@@ -1,10 +1,10 @@
 extends TestCase
 ## The OVCS simulator link's packets, against bytes OVCS's SimulatorCore.Link.Protocol encodes.
 
-# SimulatorCore.Link.Protocol.encode(%Drive{speed_m_s: 2.5, steering_rad: -0.125})
-const OVCS_DRIVE_PAYLOAD_HEX := (
-	"00367B2274797065223A226472697665222C2273706565645F6D5F73223A322E352C"
-	+ "227374656572696E675F726164223A2D302E3132357D"
+# An `actuation` as OVCS TASK-129 specifies it; OVCS has no encoder for it yet.
+const ACTUATION_HEADER := (
+	'{"type":"actuation","time_s":12.5,"drive_torque_nm":-150,"brake_torque_nm":800.5,'
+	+ '"steering_rad":0.125,"driveline_inertia_kg_m2":6.25}'
 )
 # SimulatorCore.Link.Protocol.encode(%Instruments{motor_rpm: -1250.5})
 const OVCS_INSTRUMENTS_PAYLOAD_HEX := (
@@ -17,12 +17,20 @@ const OVCS_WHOLE_RPM_INSTRUMENTS_PAYLOAD_HEX := (
 )
 
 
-func test_decodes_a_drive_ovcs_encoded() -> void:
-	var payload := OVCS_DRIVE_PAYLOAD_HEX.hex_decode()
+func test_decodes_an_actuation() -> void:
+	var message := LinkProtocol.decode(_payload(ACTUATION_HEADER))
 
-	var message := LinkProtocol.decode(payload)
-
-	assert_eq(message, {"type": "drive", "speed_m_s": 2.5, "steering_rad": -0.125})
+	assert_eq(
+		message,
+		{
+			"type": "actuation",
+			"time_s": 12.5,
+			"drive_torque_nm": -150.0,
+			"brake_torque_nm": 800.5,
+			"steering_rad": 0.125,
+			"driveline_inertia_kg_m2": 6.25,
+		}
+	)
 
 
 func test_decodes_instruments_ovcs_encoded() -> void:
@@ -43,9 +51,10 @@ func test_rejects_malformed_payloads_naming_why() -> void:
 		"invalid header": _payload("not json"),
 		"no type": _payload('{"speed_m_s":1}'),
 		"unknown message vehicle": _payload('{"type":"vehicle"}'),
-		"invalid field drive.speed_m_s": _payload('{"type":"drive","steering_rad":0}'),
-		"invalid field drive.steering_rad":
-		_payload('{"type":"drive","speed_m_s":1,"steering_rad":"x"}'),
+		"unknown message drive": _payload('{"type":"drive","speed_m_s":1,"steering_rad":0}'),
+		"invalid field actuation.time_s": _payload('{"type":"actuation"}'),
+		"invalid field actuation.steering_rad":
+		_payload(ACTUATION_HEADER.replace('"steering_rad":0.125', '"steering_rad":"x"')),
 		"invalid field instruments.motor_rpm": _payload('{"type":"instruments"}'),
 	}
 	for reason in cases:
@@ -53,9 +62,11 @@ func test_rejects_malformed_payloads_naming_why() -> void:
 
 
 func test_frames_a_payload_with_its_32_bit_length_then_header_length() -> void:
-	var packet := LinkProtocol.packet({"type": "drive", "speed_m_s": 2.5}, PackedByteArray([7, 8]))
+	var packet := LinkProtocol.packet(
+		{"type": "instruments", "motor_rpm": 2.5}, PackedByteArray([7, 8])
+	)
 
-	var header_json := '{"type":"drive","speed_m_s":2.5}'
+	var header_json := '{"type":"instruments","motor_rpm":2.5}'
 	assert_eq(_u32_big_endian(packet, 0), 2 + header_json.length() + 2)
 	assert_eq((packet[4] << 8) | packet[5], header_json.length())
 	assert_eq(packet.slice(6, 6 + header_json.length()).get_string_from_utf8(), header_json)
@@ -72,6 +83,13 @@ func test_encodes_the_state_in_ros_frames() -> void:
 		"linear_velocity_m_s": Vector3(0.0, 0.0, 4.0),
 		"angular_velocity_rad_s": Vector3(0.0, 0.5, 0.0),
 		"linear_acceleration_m_s2": Vector3(0.25, 9.75, 1.0),
+		"wheels":
+		{
+			"front_left": {"angle_rad": 3.5, "omega_rad_s": 13.25, "in_contact": true},
+			"front_right": {"angle_rad": 3.25, "omega_rad_s": 13.0, "in_contact": false},
+			"rear_left": {"angle_rad": -1.0, "omega_rad_s": 0.0, "in_contact": true},
+			"rear_right": {"angle_rad": 0.0, "omega_rad_s": -0.5, "in_contact": true},
+		},
 	}
 
 	var header := _header(LinkProtocol.encode_state(state))
@@ -83,6 +101,7 @@ func test_encodes_the_state_in_ros_frames() -> void:
 	assert_eq(header["linear_velocity_m_s"], [4.0, 0.0, 0.0])
 	assert_eq(header["angular_velocity_rad_s"], [0.0, 0.0, 0.5])
 	assert_eq(header["linear_acceleration_m_s2"], [1.0, 0.25, 9.75])
+	assert_eq(header["wheels"], state["wheels"], "each wheel as the vehicle reports it")
 	# Godot's 90° about +Y is ROS's 90° about +z: (0, 0, sin 45°, cos 45°).
 	var orientation: Array = header["orientation"]
 	assert_almost_eq(
@@ -102,8 +121,8 @@ func test_encodes_an_image_with_its_body() -> void:
 
 
 func test_framer_yields_payloads_split_across_reads_and_several_in_one() -> void:
-	var first := LinkProtocol.packet({"type": "drive", "speed_m_s": 1, "steering_rad": 0})
-	var second := LinkProtocol.packet({"type": "drive", "speed_m_s": 2, "steering_rad": 0})
+	var first := LinkProtocol.packet({"type": "instruments", "motor_rpm": 1})
+	var second := LinkProtocol.packet({"type": "instruments", "motor_rpm": 2})
 	var stream := first + second
 	var framer := LinkProtocol.Framer.new()
 
@@ -112,8 +131,8 @@ func test_framer_yields_payloads_split_across_reads_and_several_in_one() -> void
 
 	assert_eq(at_split.size(), 0)
 	assert_eq(rest.size(), 2)
-	assert_eq(LinkProtocol.decode(rest[0])["speed_m_s"], 1.0)
-	assert_eq(LinkProtocol.decode(rest[1])["speed_m_s"], 2.0)
+	assert_eq(LinkProtocol.decode(rest[0])["motor_rpm"], 1.0)
+	assert_eq(LinkProtocol.decode(rest[1])["motor_rpm"], 2.0)
 
 
 func test_framer_refuses_a_length_beyond_the_links_limit() -> void:

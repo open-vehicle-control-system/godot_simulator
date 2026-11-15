@@ -50,24 +50,19 @@ func test_tells_what_is_wrong_with_a_log() -> void:
 
 
 func test_drives_the_vehicle_as_the_log_tells() -> void:
-	var directory := PackFixtures.fresh_directory("drive_log")
-	PackFixtures.write_pack(directory, PackFixtures.vehicle_manifest("small_car"))
-	var spec: VehicleSpec = PackLibrary.scan([directory]).load_vehicle("small_car")["vehicle"]
-	var vehicle := Vehicle.new()
-	add_child(vehicle)
-	vehicle.setup(spec, VehicleModel.build(spec)["model"])
-	var driver := DriveLogDriver.new()
+	var vehicle := await VehicleFixtures.on_flat_ground(self, VehicleFixtures.small_car())
+	var driver := SpeedDriver.new()
 	add_child(driver)
 
-	driver.setup(
-		vehicle, DriveLog.parse("time_s,speed_m_s,steering_rad\n0,3.0,0\n0.2,0.0,0\n")["log"]
+	driver.follow(
+		vehicle, DriveLog.parse("time_s,speed_m_s,steering_rad\n0,3.0,0\n2.0,0.0,0\n")["log"]
 	)
-	await wait_physics_frames(6)
+	await wait_physics_frames(2 * Engine.physics_ticks_per_second)
 	var driven_m := vehicle.global_position.z
-	assert_true(driven_m > 0.2, "driven %s m" % driven_m)
-	await wait_physics_frames(30)
+	assert_almost_eq(vehicle.speed_m_s, 3.0, 0.3, "at the log's speed")
+	await wait_physics_frames(3 * Engine.physics_ticks_per_second)
 
-	assert_almost_eq(vehicle.speed_m_s, 0.0)
-	assert_true(vehicle.global_position.z < 0.75, "driven %s m" % vehicle.global_position.z)
-	vehicle.queue_free()
-	driver.queue_free()
+	assert_almost_eq(vehicle.speed_m_s, 0.0, 0.01, "stopped as the log tells")
+	assert_true(
+		vehicle.global_position.z > driven_m + 0.5, "braked to a stop: %s" % vehicle.global_position
+	)

@@ -9,7 +9,9 @@ cd "$(dirname "$0")/.."
 output="$(mktemp)"
 trap 'rm -f "$output"' EXIT
 status=0
-timeout "${TEST_TIMEOUT_S:-300}" "$GODOT" --headless --path . -s tests/run_tests.gd -- "$@" 2>&1 | tee "$output" || status=$?
+# Each frame steps 1/60 s of simulated time as fast as the machine runs it: a test of a
+# minute's driving takes what the machine needs, not a minute.
+timeout "${TEST_TIMEOUT_S:-300}" "$GODOT" --headless --fixed-fps 60 --path . -s tests/run_tests.gd -- "$@" 2>&1 | tee "$output" || status=$?
 if grep -q "SCRIPT ERROR" "$output"; then
 	echo "FAIL a test raised a script error (see SCRIPT ERROR above)" >&2
 	exit 1

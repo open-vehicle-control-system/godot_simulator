@@ -21,15 +21,25 @@ func test_both_default_packs_load() -> void:
 func test_the_default_car_reaches_100_km_h_in_about_12_s_at_full_throttle() -> void:
 	var library := PackLibrary.scan([ProjectSettings.globalize_path("res://default_packs")])
 	var spec: VehicleSpec = library.load_vehicle("default_car")["vehicle"]
-	var step_s := 1.0 / 60.0
-	var drive := {"speed_m_s": 0.0, "steering_rad": 0.0}
+	var vehicle := await VehicleFixtures.on_flat_ground(self, spec)
+	var step_s := 1.0 / Engine.physics_ticks_per_second
 	var elapsed_s := 0.0
 
-	while drive["speed_m_s"] < 100.0 / 3.6 and elapsed_s < 30.0:
-		drive = KeyboardDrive.next(drive, {"up": true}, step_s, spec)
+	while vehicle.speed_m_s < 100.0 / 3.6 and elapsed_s < 30.0:
+		vehicle.actuate(
+			KeyboardDrive.next(
+				0.0,
+				vehicle.speed_m_s,
+				vehicle.driven_wheel_speed_rad_s(),
+				{"up": true},
+				step_s,
+				spec
+			)
+		)
+		await wait_physics_frames(1)
 		elapsed_s += step_s
 
-	assert_true(elapsed_s > 11.0 and elapsed_s < 13.0, "0-100 km/h in %.1f s" % elapsed_s)
+	assert_true(elapsed_s > 11.0 and elapsed_s < 14.0, "0-100 km/h in %.1f s" % elapsed_s)
 
 
 func test_starts_without_options_and_drives_on_the_default_track() -> void:

@@ -1,14 +1,15 @@
 class_name SimulatorLink
 extends Node
-## The TCP client of OVCS's simulator link (SimulatorCore.Link): applies the drives OVCS sends
-## to the vehicle and sends the vehicle's state every physics step, and camera images when
-## given them. It keeps the motor rpm OVCS last reported, for the rev counter.
+## The TCP client of OVCS's simulator link (SimulatorCore.Link): actuates the vehicle as OVCS
+## says and sends the vehicle's state every physics step, and camera images when given them.
+## It keeps the motor rpm OVCS last reported, for the rev counter.
 ##
-## With no drive for DRIVE_TIMEOUT_S, or no connection, the vehicle is commanded to stop. With
-## no instruments for INSTRUMENTS_TIMEOUT_S, or no connection, the motor rpm reads 0.
+## With no actuation for ACTUATION_TIMEOUT_S the drive torque drops to 0, the brakes and the
+## steering staying as last sent; with no connection the vehicle is parked. With no
+## instruments for INSTRUMENTS_TIMEOUT_S, or no connection, the motor rpm reads 0.
 
 const RECONNECT_S := 1.0
-const DRIVE_TIMEOUT_S := 0.5
+const ACTUATION_TIMEOUT_S := 0.5
 const INSTRUMENTS_TIMEOUT_S := 0.5
 ## Unsent bytes beyond which images are dropped: states keep flowing to a slow reader.
 const MAX_IMAGE_BACKLOG_BYTES := 2 * 1024 * 1024
@@ -24,7 +25,7 @@ var _port: int
 var _peer := StreamPeerTCP.new()
 var _framer := LinkProtocol.Framer.new()
 var _retry_in_s := 0.0
-var _since_drive_s := INF
+var _since_actuation_s := INF
 var _motor_rpm := 0.0
 var _motor_rpm_received_s := -INF  ## on time_s's clock
 var _outgoing := PackedByteArray()
@@ -58,16 +59,22 @@ func _physics_process(delta: float) -> void:
 	if _vehicle == null:
 		return
 	time_s += delta
-	_since_drive_s += delta
+	_since_actuation_s += delta
 	_keep_connected(delta)
 	if connected:
 		_read_messages()
-	if _since_drive_s > DRIVE_TIMEOUT_S:
-		_vehicle.stop()
+	if _since_actuation_s > ACTUATION_TIMEOUT_S and _vehicle.actuation.drive_torque_n_m != 0.0:
+		var last := _vehicle.actuation
+		_vehicle.actuate(
+			Actuation.of(
+				0.0, last.brake_torque_n_m, last.steering_rad, last.driveline_inertia_kg_m2
+			)
+		)
 	if connected:
-		var state := _vehicle.motion_state()
+		var state := _vehicle.motion_state().duplicate()
 		state["time_s"] = time_s
 		state["odometer_m"] = _vehicle.odometer_m
+		state["wheels"] = _vehicle.wheel_states()
 		_send(LinkProtocol.encode_state(state))
 
 
@@ -104,9 +111,16 @@ func _read_messages() -> void:
 		if message.has("error"):
 			push_warning("link: dropped a packet: %s" % message["error"])
 			continue
-		if message["type"] == "drive":
-			_since_drive_s = 0.0
-			_vehicle.command(message["speed_m_s"], message["steering_rad"])
+		if message["type"] == "actuation":
+			_since_actuation_s = 0.0
+			_vehicle.actuate(
+				Actuation.of(
+					message["drive_torque_nm"],
+					message["brake_torque_nm"],
+					message["steering_rad"],
+					message["driveline_inertia_kg_m2"]
+				)
+			)
 		else:
 			_motor_rpm = message["motor_rpm"]
 			_motor_rpm_received_s = time_s
@@ -130,8 +144,8 @@ func _send(packet: PackedByteArray) -> void:
 func _disconnect(reason: String) -> void:
 	print("link: %s" % reason)
 	connected = false
-	_since_drive_s = INF
+	_since_actuation_s = INF
 	_motor_rpm_received_s = -INF
 	_outgoing.clear()
 	_peer.disconnect_from_host()
-	_vehicle.stop()
+	_vehicle.park()

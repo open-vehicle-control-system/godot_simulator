@@ -84,12 +84,13 @@ func test_needles_and_steering_wheel_follow_the_vehicle() -> void:
 	var parts: Dictionary = cockpit["parts"]
 	var rest: Basis = parts["Cockpit_Speed"].basis
 
-	# 20 m/s is 72 km/h.
-	vehicle.command(20.0, deg_to_rad(5.0))
+	# 20 m/s is 72 km/h; the air and rolling slow it a little before the needle reads it.
+	vehicle.place(Transform3D.IDENTITY, 20.0)
+	vehicle.actuate(Actuation.of(0.0, 0.0, deg_to_rad(5.0), 0.0))
 	await _physics_then_process_frames()
 
 	assert_almost_eq(
-		parts["Cockpit_Speed"].basis.x, Basis(Vector3.BACK, deg_to_rad(72.0 * 1.2)) * rest.x, 1e-4
+		parts["Cockpit_Speed"].basis.x, Basis(Vector3.BACK, deg_to_rad(72.0 * 1.2)) * rest.x, 2e-3
 	)
 	assert_almost_eq(
 		parts["Cockpit_Revs"].basis.x, Basis(Vector3.BACK, deg_to_rad(3000.0 * 0.05)) * rest.x, 1e-4
@@ -119,7 +120,7 @@ func test_rev_counter_rests_without_a_reported_rpm_however_fast_the_vehicle_goes
 	var needle: Node3D = cockpit["parts"]["Cockpit_Revs"]
 	var rest := needle.basis
 
-	cockpit["vehicle"].command(20.0, 0.0)
+	cockpit["vehicle"].place(Transform3D.IDENTITY, 20.0)
 	await _physics_then_process_frames()
 
 	assert_almost_eq(needle.basis.x, rest.x, 1e-6)
@@ -130,10 +131,11 @@ func test_speedometer_shows_the_speed_when_reversing() -> void:
 	var needle: Node3D = cockpit["parts"]["Cockpit_Speed"]
 	var rest := needle.basis
 
-	cockpit["vehicle"].command(-5.0, 0.0)
+	cockpit["vehicle"].place(Transform3D.IDENTITY, -5.0)
+	cockpit["vehicle"].actuate(Actuation.of(0.0, 0.0, 0.0, 0.0))
 	await _physics_then_process_frames()
 
-	assert_almost_eq(needle.basis.x, Basis(Vector3.BACK, deg_to_rad(18.0 * 1.2)) * rest.x, 1e-4)
+	assert_almost_eq(needle.basis.x, Basis(Vector3.BACK, deg_to_rad(18.0 * 1.2)) * rest.x, 2e-3)
 
 
 func test_reports_an_instrument_whose_node_the_model_lacks() -> void:
@@ -185,7 +187,7 @@ func test_each_mirror_looks_back_from_its_glass() -> void:
 	var vehicle: Vehicle = cockpit["vehicle"]
 	var mirrors: Mirrors = cockpit["mirrors"]
 
-	vehicle.global_transform = Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(5.0, 0.0, 0.0))
+	vehicle.place(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(5.0, 0.0, 0.0)))
 	await _physics_then_process_frames()
 
 	# Left door, interior, right door: the fixture's glass, on a body 0.85 m up.

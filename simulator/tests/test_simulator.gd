@@ -26,13 +26,15 @@ func test_starts_from_its_options_and_is_driven_over_the_link() -> void:
 		await get_tree().physics_frame
 		server.poll()
 		if server.connected():
-			server.send_drive(3.0, 0.0)
+			server.send_actuation(400.0, 0.0, 0.0)
 		if server.of_type("state").size() > 60:
 			break
 
 	var vehicle: Vehicle = simulator.get_node("Vehicle")
-	assert_true(vehicle.global_position.z > 1.0, "driven to %s" % vehicle.global_position)
-	assert_almost_eq(server.of_type("state").back()["linear_velocity_m_s"][0], 3.0, 1e-6)
+	assert_true(vehicle.global_position.z > 0.2, "driven to %s" % vehicle.global_position)
+	var last: Dictionary = server.of_type("state").back()
+	assert_true(last["linear_velocity_m_s"][0] > 0.5, "reports its speed: %s" % last)
+	assert_true(last["wheels"]["front_left"]["omega_rad_s"] > 1.0, "and its wheels' spin")
 	simulator.queue_free()
 	server.stop()
 

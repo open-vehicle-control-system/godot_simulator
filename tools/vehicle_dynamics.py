@@ -9,7 +9,7 @@ production cars:
 - Cornering stiffness: each axle's, at its static load, 12.5 (front) and 22 (rear) times that
   load per radian. These are effective axle values: a tyre alone gives 15 to 20, the suspension's
   compliance and roll steer take some away at the front (Milliken, Race Car Vehicle Dynamics,
-  ch. 5 and 7). They give an understeer gradient near 2 degrees per g, ISO 4138's range for
+  ch. 5 and 7). They give an understeer gradient of 2 to 3 degrees per g, ISO 4138's range for
   production cars (1 to 4).
 - Tyres: Pacejka's magic formula with C = 1.3 (a slide keeps about 90 % of the peak force) and
   E = -1.5, the peak near 6 degrees of slip at the rear and 10 at the front (where the effective

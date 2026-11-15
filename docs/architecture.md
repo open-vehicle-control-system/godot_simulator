@@ -4,14 +4,16 @@ description: How the simulator, the packs and the OVCS link fit together.
 ---
 
 The simulator stands where the vehicle's hardware would meet the world. OVCS's simulated
-hardware computes how the vehicle moves from what its VMS commands and sends that motion over
-the [simulator link](./simulator_link.md); the simulator moves the vehicle accordingly in a
-track pack's world and sends back what the vehicle senses there.
+hardware turns what its VMS commands into the efforts of the vehicle's actuators (the drive
+torque at the wheels, the brakes' torque, the steering angle) and sends them over the
+[simulator link](./simulator_link.md); the simulator is the vehicle's one dynamics model: it
+moves the vehicle by those efforts through its tyres in a track pack's world, and sends back
+how the body moves, how each wheel turns and what the vehicle senses there.
 
 ```text
 OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TCP── simulator
                                           ◄── state, stereo images ──┘
-                                          drive (speed, steering) ──►
+                                 actuation (torques, steering) ──►
                                           instruments (motor rpm) ──►
 ```
 
@@ -26,11 +28,13 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `packs/powertrain_spec.gd` | A vehicle's motor, gearbox and selected gear, validated |
 | `packs/instruments_spec.gd`, `packs/mirrors_spec.gd` | A vehicle's cockpit instruments and mirrors, validated |
 | `vehicle/vehicle_model.gd` | The vehicle's meshes, from its glTF or a placeholder |
-| `vehicle/dynamic_bicycle.gd` | The dynamic bicycle model: tyres that slip. Pure |
-| `vehicle/bicycle_model.gd` | The kinematic bicycle model, the slow limit of the dynamic one. Pure |
-| `vehicle/vehicle.gd` | The vehicle: follows the commanded speed and steering on the ground, keeps an odometer, reports its motion |
-| `vehicle/powertrain.gd` | The force the motor gives through the gear in use, drag and rolling resistance. Pure |
-| `vehicle/keyboard_drive.gd`, `vehicle/keyboard_driver.gd` | Speed and steering from the arrow keys under `--keyboard` (pure), and the node that reads the keys |
+| `vehicle/vehicle.gd` | The vehicle: a rigid body on four sprung wheels, moved by its actuation; reports its motion and its wheels, keeps an odometer |
+| `vehicle/actuation.gd` | What the driver asks of the vehicle: drive and brake torques, steering, the driveline's inertia |
+| `vehicle/wheels.gd` | The four wheels' spin through an open differential, brakes and rolling resistance, and their tyres' tread. Pure |
+| `vehicle/tyre.gd` | A tyre's force from its tread's deflection: Pacejka's magic formula over the combined slip. Pure |
+| `vehicle/powertrain.gd` | The torque the motor gives the wheels through the gear in use, the driveline's inertia, drag and rolling resistance. Pure |
+| `vehicle/keyboard_drive.gd`, `vehicle/keyboard_driver.gd` | The actuation the arrow keys ask for under `--keyboard` (pure), and the node that reads the keys |
+| `vehicle/speed_control.gd`, `vehicle/speed_driver.gd` | Torques that hold a commanded speed, and the node that drives by them (`--hold`, `--drive-log`) |
 | `vehicle/instrument_scales.gd` | Needle and steering wheel angles from the pack's scales. Pure |
 | `vehicle/instruments.gd` | Turns the cockpit's needles and steering wheel as the vehicle moves, the rev counter to the motor rpm OVCS reports |
 | `vehicle/mirrors.gd`, `vehicle/mirror.gdshader` | The mirrors: a view looking back per piece of mirror glass |
@@ -61,7 +65,7 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `sensors/compute_shader.gd` | Compiles the compute shaders, with their includes |
 | `sensors/stereo_sender.gd`, `sensors/stereo_recorder.gd` | Pairs to the link, frames to disk |
 | `sensors/gpu_readback.gd` | Reads textures back from the GPU a few frames later, all of them before the simulator quits |
-| `vehicle/drive_log.gd`, `vehicle/drive_log_driver.gd` | A drive over time read from a CSV, and the vehicle driven by it (`--drive-log`) |
+| `vehicle/drive_log.gd` | A drive over time (speed, steering) read from a CSV (`--drive-log`) |
 | `world/tiles_at_once.gd` | Every tile around the vehicle in the scene before each frame, for a repeatable recording (`--record`) |
 | `sensors/stereo_frame.gd`, `sensors/numpy_file.gd` | What the camera shows of one frame; a float map as a `.npy` file |
 | `sensors/segmentation.gd`, `sensors/shaders/label.gdshader`, `label.gdshaderinc` | The segmentation classes, and how a surface shows its class to the ground truth camera |
@@ -80,85 +84,88 @@ Godot's.
 
 ## The vehicle's motion
 
-OVCS owns the speed: the vehicle rolls along its heading at the speed of the last drive, and
-steers by its steering angle; it rests on the ground under its four wheels: a ray below each
-wheel finds its contact, the body follows the plane through them (pitch and roll), and each
-wheel rises or drops within a short suspension travel to touch its own contact. With no drive
-for half a second, or no link, it is commanded to stop.
+The vehicle (`Vehicle`) is a Jolt rigid body, its mass, centre of gravity and yaw inertia its
+pack's (`vehicle.dynamics`; pitch and roll inertia those of a uniform box of the body's size),
+and only the forces below move it: no damping of the engine's own. Its driver sets its
+actuation (`Actuation`): the drive torque at the driven wheels, the brakes' total torque, the
+front wheels' bicycle-equivalent steering angle and the inertia of the motor and gearbox as
+the driven wheels feel it. OVCS sends them (absolute, held until the next); under `--keyboard`,
+`--hold` and `--drive-log` the simulator computes them. Nothing else moves the vehicle: what
+its wheels measure and how its body moves differ as they do on a car (a lifted wheel or one on
+ice spins, a wall stops the body while the drive still pushes).
 
-How it turns is a dynamic bicycle model (`DynamicBicycle`), one axle at each end, about the
-centre of gravity: the vehicle can point elsewhere than it goes. Each axle's side force grows
-with its slip angle (the angle between where its wheels roll and where they go), at first by its
-cornering stiffness, up to a peak of its grip, then falls a little as the tyres slide (Pacejka's
-magic formula). Braking moves load onto the front axle and accelerating onto the rear (mass ×
-acceleration × centre-of-gravity height / wheelbase); cornering moves load from the inner wheels
-to the outer ones, shared between the axles by roll stiffness. A tyre's stiffness grows less
-than its load and its friction falls as its load rises, so the more loaded axle, and the axle
-whose load cornering moves across most (the front, on a road car), loses grip: the vehicle
-understeers at the limit. The force an axle carries along the road, to change the speed or to
-hold it while sliding, takes its share of the grip (the friction circle): braking is split by the
-brakes' bias, the rear kept below its share of the load as a proportioning valve does, traction
-goes to the driven axle. Steady cornering never exceeds the grip. Every property of the vehicle
-is its pack's `vehicle.dynamics` ([Pack format](./pack_format.md#vehicle-packs)); `--set`
-overrides one for a run, to tune it.
+Each physics step (60 Hz):
 
-Taken gently, corners follow the kinematic path. A road car as `tools/vehicle_dynamics.py`
-describes it behaves as standard tests measure production cars: it understeers by about 2° per
-g (ISO 4138), braking at 0.6 g in a 60 km/h, 50 m turn tightens its line a little without a
-slide (ISO 7975), and lifting off at the limit tucks its nose in. Brakes biased to the rear
-without a proportioning valve, or soft rear tyres, slide the tail out and can spin it; steering
-into the slide catches it. The model steps in substeps of at most 4 ms (and half its fastest time
-constant), and below 1 to 3 m/s it blends into the kinematic bicycle model about the rear axle,
-so parking and standing still are steady. Over a wall, the slide loses the share of speed the
-wall takes. The tyres pass on at most their grip along the road, whatever the speed command
-asks.
+- **Suspension.** Each wheel finds the ground with a ray down its suspension, along the body's
+  up axis, against the ground and what stands on it. Its spring is preloaded to carry the
+  wheel's share of the weight at the pack's ride height, sized for a 1.5 Hz bounce with 35 % of
+  critical damping, and meets a bump stop ten times as stiff past its travel (0.3 wheel radii up
+  or down: 10 cm on a car). Anti-roll bars bring each axle's roll stiffness to its pack share
+  (`front_roll_stiffness_share`) of a total that leans the body 4° per g of cornering. A
+  wheel whose ray finds nothing is in the air: no load, no force.
+- **Brakes.** The total brake torque is split by the brakes' bias, the rear's share kept its
+  margin below the rear's share of the load as a proportioning valve does.
+- **Wheels** (`Wheels`), stepped in substeps of 0.5 ms, the ground's motion under each wheel
+  and its load held for the step. The drive torque reaches the two wheels of a driven axle
+  through an open differential: each gets the same torque, and the driveline's inertia turns
+  with their mean speed, so one wheel in the air spins while the other stands. The brakes and
+  rolling resistance hold a wheel still up to their torque and never turn it back. A wheel's own
+  inertia is 1 % of the vehicle's mass at its radius.
+- **Tyres** (`Tyre`). The tread at a contact is a spring that deflects as the contact slips
+  (along, as the wheel turns faster or slower than the ground passes; across, as the ground
+  passes sideways) and relaxes as the wheel rolls on, over its relaxation length (0.45 wheel
+  radii along, 1.2 across). Rolling, the deflection settles at the slip times that length, so
+  the force is the slip's; standing, the tread is a damped spring that holds the vehicle
+  without creeping. The force is Pacejka's magic formula over both deflections combined, each
+  scaled by its stiffness (the pack's cornering stiffness across; 18 times the static load per
+  unit of slip along), so a tyre that brakes or drives holds less sideways. A tyre's stiffness
+  grows less than its load, its friction falls as its load rises, and a deflection past three
+  times the peak's slides. The forces act at the contacts.
+- **Air.** Drag (`powertrain.drag_area_m2`, air at 1.2 kg/m³) at the centre of mass.
 
-The state OVCS reads is the origin's: the speed along the heading, the lateral velocity and yaw
-rate from the model, and what an IMU there reads, the model's lateral acceleration (plus the yaw
-acceleration's share at the origin) and gravity's reaction. The odometer counts the part of each
-move along the heading: what the wheels roll. There is no longitudinal tyre slip (the speed is
-OVCS's), no suspension dynamics (load moves across at once) and no aerodynamics but the drag that
-holds back keyboard driving; a vehicle moved by its own forces is OVCS's TASK-81.
+So the vehicle squats and dives, leans out of turns and understeers at the limit; driven wheels
+spin when asked for more than they hold; a car braked hard at the rear in a fast corner spins.
+The body box (raised 0.6 wheel radii off the ground, so kerbs pass under it) collides with
+walls, buildings, trunks and posts and, off its wheels, the ground: a wall stops it where it
+touches, a scrape keeps the speed along the wall.
 
-The vehicle does not pass through what it hits. Before every move its body box (raised off the
-ground so kerbs never reach it) is swept along the move; if the track's collision is in
-the way (walls, barriers, buildings, tree trunks, sign posts) it goes as far as is clear, then
-slides along the obstacle with the part of the rest of its move that runs along it, keeping
-that share of its speed: a scrape keeps most of it, a head-on hit stops it, odometer and speed
-as OVCS then reads them. Steering always turns the vehicle, so it can turn away from what it
-touches. The ground is on a physics layer
-of its own (`CollisionLayers`) that the wheels' rays see and the sweep does not, so a crest or a
-bank reaching the box never stops it. A sweep ignores what the box is already into, so that is
-asked first: a body into an obstacle moves freely away from it, to back off or turn away, and
-not at all further into it.
+The state OVCS reads is the origin's: its pose, velocity and angular velocity, and what an IMU
+there reads, the change of its velocity over the step and gravity's reaction; and per wheel its
+angle turned, its spin and whether it touches the ground. The odometer counts the origin's
+travel along its heading, for debugging. With no actuation for half a second the drive torque
+drops to 0 and the brakes stay as last sent; with no link the vehicle is parked: braked harder
+than its tyres hold.
 
 ### Driven by the keys
 
-Under `--keyboard` the speed command comes from the vehicle's powertrain, its pack's
-`vehicle.powertrain` (`Powertrain`). Up is full throttle: the motor gives its full torque
-up to the speed where its power takes over, then its power, through the gear in use, the final
-drive and the driveline's efficiency, and nothing at its rpm limit; the driven axle passes on at
-most its grip at the load accelerating leaves on it (`DynamicBicycle.traction_limit_n`), so
-the friction circle is never asked for more than the axle holds going straight. Drag and
-rolling resistance take their share, and the motor, gearbox and wheels spinning up add to the
-mass the motor moves (Gillespie's 1.04 + 0.0025 × overall ratio²). The top speed is where the rpm
-limit or the balance of power and drag stops it. With no key the vehicle coasts, slowed by drag
-and rolling alone; Down brakes at 8 m/s² and reverses at 3 m/s² up to 4 m/s. A selected gear
-stays whatever the speed; `"automatic"` takes the gear that pushes hardest at the speed, the
-highest of those that push as hard. There is no clutch, no shift time and no torque curve but
-the flat torque and power.
+Under `--keyboard` the actuation comes from the vehicle's powertrain, its pack's
+`vehicle.powertrain` (`Powertrain`). Up is full throttle: the motor gives its full torque up to
+the speed where its power takes over, then its power, through the gear in use, the final drive
+and the driveline's efficiency, and nothing at its rpm limit. The driveline's inertia is what
+Gillespie's approximation adds to the mass for the motor and gearbox, 0.25 % of it per squared
+overall ratio. The tyres pass on what they hold, and drag and rolling resistance take their
+share, so the top speed is where the rpm limit or the balance of power and drag stops it. With
+no key the vehicle coasts, and stopped it is held; Down brakes at 0.8 g and, stopped, reverses
+in first gear up to 4 m/s. A selected gear stays whatever the speed; `"automatic"` takes the
+gear that pushes hardest at the driven wheels' speed, shifting up short of the rpm limit. There
+is no clutch, no shift time and no torque curve but the flat torque and power.
 
-Under OVCS the speed is OVCS's: the powertrain only shapes keyboard driving. OVCS's own
-simulated hardware has its own motor-to-wheel ratio (for OVCS1, `Ovcs1.Simulation` in the OVCS
-repository), which gives the rpm the rev counter shows.
+`--hold` and `--drive-log` drive by a speed control (`SpeedControl`): a proportional-integral
+control of the speed, drag and rolling fed forward, at most 3 m/s² either way, the motor
+pushing and the brakes slowing; standstill commanded and reached, the vehicle is parked. It is
+a test driver: it knows no limit of the vehicle's powertrain.
+
+Under OVCS the efforts are OVCS's: the powertrain only shapes keyboard driving. OVCS's own
+simulated hardware has its motor and gearbox (for OVCS1, `Ovcs1.Simulation` in the OVCS
+repository), which give the torque, the driveline's inertia and the rpm the rev counter shows.
 
 ## Physics
 
-The physics engine is Jolt (`physics/3d/physics_engine` in `project.godot`). Nothing is
-simulated: the simulator only asks the world questions, four rays and a body sweep a step. Jolt
-answers a ray in 1.9 µs and the sweep in 3 µs on Spa, where Godot Physics took 2.4 µs and
-110 µs: over a lap a physics step takes 0.6 to 0.8 ms where it took 1.0 ms (the rest of a step
-is the tiles' and the link's own work), and the worst frame is the same.
+The physics engine is Jolt (`physics/3d/physics_engine` in `project.godot`), gravity
+9.81 m/s². It moves the vehicle's body and its contacts with the world; the vehicle adds its
+wheels' forces each step (`_integrate_forces`), four rays and the wheels' substeps, about
+0.5 ms. With the same inputs at the same steps, a run repeats exactly on one machine and
+build: `--record` relies on it.
 
 Jolt builds a shape the first time it is used in a space, not when its data is set, and a height
 map costs it 45 ns a sample: 12 ms for a tile's 513 by 513 heights. So a tile's ground is cut

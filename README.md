@@ -62,14 +62,14 @@ only when its source is there).
 |---|---|
 | `--track=ID`, `--vehicle=ID` | the packs to load (`default_track` and `default_car` by default) |
 | `--packs=DIR` | a directory of packs, searched before `packs/` next to the executable, `user://packs` and the bundled `simulator/default_packs/`; repeatable |
-| `--link=HOST[:PORT]` | the OVCS simulator link (port 7400 by default); without it the vehicle stands still |
+| `--link=HOST[:PORT]` | the OVCS simulator link (port 7400 by default): OVCS drives the vehicle by its actuators' torques and steering; without it the vehicle stands parked |
 | `--keyboard` | drive with the arrow keys instead, to look around a track without OVCS |
-| `--hold=KM_H,STEERING_DEG` | hold this speed and front wheel angle (positive left) instead, without OVCS: for a screenshot of a moving vehicle |
+| `--hold=KM_H,STEERING_DEG` | start rolling at this speed and hold it and this front wheel angle (positive left) by a speed control instead, without OVCS: for a screenshot of a moving vehicle |
 | `--camera=VIEW` | `chase`, `cockpit`, `bonnet`, `side` or `front` |
 | `--stereo-record=DIR` | record stereo pairs, poses and calibration ([Stereo camera](./docs/stereo.md)) |
 | `--ground-truth` | with `--stereo-record`, record each pair's depth, disparity and segmentation too; `--record` always does ([Stereo camera](./docs/stereo.md#ground-truth)) |
 | `--record=DIR` | record the pair and its ground truth frame by frame, the same run after run, for `--record-seconds=S` or the length of the drive log, then quit ([Stereo camera](./docs/stereo.md#recording-the-same-twice)) |
-| `--drive-log=FILE` | drive as a CSV tells over time (`time_s`, `speed_m_s`, `steering_rad`: a recording's `poses.csv` is one), without OVCS |
+| `--drive-log=FILE` | drive at the speeds and steering a CSV tells over time (`time_s`, `speed_m_s`, `steering_rad`: a recording's `poses.csv` is one) by a speed control, without OVCS |
 | `--show-stereo` | show the stereo pair at start |
 | `--spawn=X,Y,Z,YAW_DEG` | start there instead of at the track's spawn, in the track's frame as `spawn` in its `pack.json` |
 | `--eye=X,Y,Z` | look at the vehicle from this fixed point of the track's frame |
@@ -81,7 +81,12 @@ only when its source is there).
 Keys: C cycles the views, V shows the stereo pair, F11 toggles full screen, Esc quits. Under
 `--keyboard` the arrow keys drive: Up is full throttle through the vehicle's powertrain (its
 motor, gearbox and selected gear: `--set=vehicle.powertrain.gear=3` picks another), Down
-brakes then reverses, Left and Right steer.
+brakes then reverses, Left and Right steer; with no key the vehicle coasts, and stopped it is
+held.
+
+The vehicle is a rigid body on four sprung wheels with tyres that slip: it leans in turns,
+dives under braking, spins its wheels on low grip and stops against walls
+([Architecture](./docs/architecture.md#the-vehicles-motion)).
 
 ## Checks
 

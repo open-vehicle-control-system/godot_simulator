@@ -12,11 +12,13 @@ The tests are GDScript, run headless by a runner in the repository:
 
 A test script is `simulator/tests/test_*.gd`, extends `TestCase`, and its tests are methods
 named `test_*`. It runs inside the scene tree, so a test may add nodes and
-`await wait_physics_frames(count)`. Assertions: `assert_true`, `assert_eq`, `assert_almost_eq`
+`await wait_physics_frames(count)`. The runner steps each frame by 1/60 s of simulated time as
+fast as the machine goes (`--fixed-fps 60`): a minute of driving takes seconds. A test of
+something that takes real time (encoding on a worker thread) paces itself. Assertions: `assert_true`, `assert_eq`, `assert_almost_eq`
 (numbers or vectors), `fail`. The runner exits with 1 when a test fails or a script does not
 load, and `run_tests.sh` also fails the run when Godot reports a `SCRIPT ERROR`: an error inside
-a test aborts it without failing an assertion. A frame passes between two tests, so what one
-queued to free is gone before the next starts.
+a test aborts it without failing an assertion. After each test the runner frees the nodes it
+added and a frame passes, so no body of one test stands in the next one's way.
 
 Helpers:
 
@@ -24,8 +26,10 @@ Helpers:
   model) into a fresh directory, so no test depends on a real pack.
 - The bundled default packs (`res://default_packs`) are real packs every checkout has:
   `test_default_packs.gd` starts the simulator without options on them and drives.
-- `LinkTestServer` is OVCS's side of the link: it accepts the simulator, sends drives and
-  collects what the simulator sends.
+- `VehicleFixtures` stands a vehicle on flat ground, settled on its springs, and holds it at a
+  speed (`hold`) or lets the test actuate it alone (`release`).
+- `LinkTestServer` is OVCS's side of the link: it accepts the simulator, sends actuations and
+  instruments, and collects what the simulator sends.
 
 Headless Godot does not render, but it does compile shaders: `test_shaders.gd` loads every
 `.gdshader` and fails on one that does not compile (it would draw its surface white). Tests

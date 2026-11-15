@@ -2,9 +2,10 @@
 
 ## Intent
 
-A visual simulator for vehicles built on OVCS. The vehicle's own OVCS stack (VMS, simulated
-hardware, ROS bridge) decides how the vehicle moves; this simulator shows it moving in a
-realistic world and senses that world for it: pose, motion, IMU and a stereo camera pair.
+A simulator for vehicles built on OVCS. The vehicle's own OVCS stack (VMS, simulated hardware,
+ROS bridge) decides what its actuators do; this simulator is the vehicle's one dynamics model:
+it moves the vehicle by its actuators' efforts in a realistic world and senses that world for
+it: pose, motion, wheels, IMU and a stereo camera pair.
 
 Tracks and vehicles are content, released on their own schedule and under their own licences,
 apart from the simulator.
@@ -17,9 +18,11 @@ model is the one exception to generated, CC0 content: "Generic Sedan Car" by Má
 
 ## Goals
 
-- Show a vehicle driven by OVCS over the simulator link, in Godot 4.6.
-- Report the vehicle's state and a rectified stereo pair over the link, and record pairs,
-  poses and calibration to disk for offline vision work.
+- Move a vehicle by the actuator efforts OVCS sends over the simulator link, in Godot 4.6:
+  body, suspension, each wheel's spin, tyres and contact with the world, so what the VMS
+  measures can differ from how the vehicle moves as it does on the road.
+- Report the vehicle's state, its wheels and a rectified stereo pair over the link, and record
+  pairs, poses and calibration to disk for offline vision work.
 - Load tracks and vehicles from packs found at runtime; none ship with the simulator but the
   two defaults (CC0, but for the default car's credited CC BY 4.0 model).
 - Follow the OVCS development process and code rules, adapted to GDScript and Python.
@@ -29,8 +32,9 @@ model is the one exception to generated, CC0 content: "Generic Sedan Car" by Má
 - Driving input in normal use. Godot visualises; driving comes from OVCS (joystick messages,
   Nav2, a simulated radio). The exception is `--keyboard`: the arrow keys drive, so a track can
   be looked around without OVCS; it excludes `--link`.
-- A vehicle dynamics model. The vehicle follows OVCS's commanded speed and steering (OVCS's
-  `SimulatorCore.Vehicle` computes them); a world with its own dynamics is OVCS TASK-81.
+- Lockstep with OVCS. OVCS's VMS runs on the wall clock, so the simulation keeps real time as
+  a hardware-in-the-loop bench does; runs over the link repeat within tolerances, not bit for
+  bit.
 - A code dependency on OVCS. The link's wire format is the only contract.
 
 ## Anti-goals
@@ -42,10 +46,12 @@ model is the one exception to generated, CC0 content: "Generic Sedan Car" by Má
 
 ## Constraints
 
-- Wire format: OVCS `SimulatorCore.Link.Protocol`, as of the `feat/simulator-godot` branch.
+- Wire format: OVCS `SimulatorCore.Link.Protocol`, its actuation contract OVCS's TASK-129.
   TCP, each packet a 32-bit big-endian length, then a 16-bit big-endian header length, a JSON
-  header and an optional binary body. `drive` (`speed_m_s`, `steering_rad`) comes in; `state`
-  and `image` go out, in ROS conventions (REP-103: `base_link` x forward, y left, z up).
+  header and an optional binary body. `actuation` (drive and brake torques, steering, the
+  driveline's inertia) and `instruments` come in; `state` (with each wheel's angle, spin and
+  contact) and `image` go out, in ROS conventions (REP-103: `base_link` x forward, y left,
+  z up).
 - The VMS measures the wheels against the wall clock: the simulation keeps real time and never
   waits on vsync.
 - Track data comes from CC-BY 4.0 (Wallonia LiDAR and orthophotos) and ODbL (OpenStreetMap)
@@ -70,11 +76,25 @@ model is the one exception to generated, CC0 content: "Generic Sedan Car" by Má
 
 ### How the vehicle moves
 
-1. **Kinematic follower (chosen).** A bicycle model about the rear axle at the commanded speed
-   and steering, kept on the ground by a ray. OVCS already owns the motion; this is what the
-   link's `drive` message means today.
-2. **Godot `VehicleBody3D` dynamics.** Needs actuations rather than a speed on the link: OVCS
-   TASK-81 decides that first.
+One side owns the vehicle's dynamics: two models integrating one vehicle drift apart, and
+correcting one from the other makes it oscillate. It has to be a full model (body in 3D, each
+wheel's spin, tyre forces, contact with the world), as CarMaker, ASM or CarSim are, since a
+lifted wheel, wheels spinning on ice and a wall stopping the body while the VMS still commands
+torque are what testing the VMS needs; only the side with the world's geometry and a physics
+engine can produce them.
+
+1. **A rigid body on four sprung wheels, driven by actuator efforts (chosen).** A Jolt rigid
+   body; per wheel a suspension found by a ray, its spin through an open differential with the
+   driveline's inertia, brakes that hold, a tyre with combined slip and relaxation. OVCS sends
+   torques and steering; OVCS's `SimulatorCore.Vehicle` stays a flat-ground model for fast runs
+   without the simulator.
+2. **OVCS owns the dynamics, the simulator follows a pose.** One owner too, but OVCS's model
+   has no world: no walls, slopes, lifted wheels or rollover.
+3. **A kinematic follower of a commanded speed, with the simulator's own model.** Two models
+   of one vehicle: what OVCS sent and what the simulator did disagree, and OVCS integrated its
+   own odometry on top.
+4. **Godot's `VehicleBody3D`.** Its wheels are rays with a simple friction model: no combined
+   slip, no differential, no driveline inertia.
 
 ### Repository shape
 
@@ -96,10 +116,10 @@ model is the one exception to generated, CC0 content: "Generic Sedan Car" by Má
 |---|---|
 | `main.gd` | Composition root: reads options, loads the track and vehicle packs, wires the link, the stereo camera and the views |
 | `packs/` | Finds packs on the search path, validates `pack.json`, loads a track or a vehicle |
-| `link/link_protocol.gd` | Pure: packet framing, encode `state` and `image`, decode `drive`; Godot ↔ ROS frames |
-| `link/simulator_link.gd` | The TCP client: reconnects, reads drives, sends state every physics step and the images it is given |
-| `vehicle/bicycle_model.gd` | Pure: the next rear-axle position, yaw and yaw rate from speed, steering and wheelbase |
-| `vehicle/vehicle.gd` | The vehicle node: model from its pack, follows the drive, stops when drives stop, keeps an odometer |
+| `link/link_protocol.gd` | Pure: packet framing, encode `state` and `image`, decode `actuation` and `instruments`; Godot ↔ ROS frames |
+| `link/simulator_link.gd` | The TCP client: reconnects, reads actuations, sends state every physics step and the images it is given |
+| `vehicle/tyre.gd`, `vehicle/wheels.gd` | Pure: a tyre's force from its tread; the wheels' spin, brakes and differential |
+| `vehicle/vehicle.gd` | The vehicle: a rigid body on four sprung wheels, moved by its actuation, parked without one |
 | `sensors/stereo_camera.gd` | Two parallel pinhole cameras on the vehicle's mount: intrinsics, capture |
 | `sensors/stereo_sender.gd` | Sends pairs over the link at the camera rate |
 | `sensors/stereo_recorder.gd` | Writes pairs, poses and `calib.json` to a directory |
@@ -136,8 +156,9 @@ The search path is the `--packs` directories, then `packs/` next to the executab
 - Connects to `--link`, retrying every second; a new connection replaces the old one.
 - On every physics step: a `state` packet. At the stereo rate: one `image` per camera, JPEG,
   encoded off the main thread, skipped when the previous pair is still encoding.
-- A `drive` sets the vehicle's commanded speed and steering. No drive for 0.5 s, or no
-  connection: the vehicle is commanded to stop.
+- An `actuation` sets the drive and brake torques, the steering and the driveline's inertia.
+  No actuation for 0.5 s: no drive torque, brakes and steering as last sent. No connection:
+  the vehicle is parked.
 - Unknown packets are dropped with a warning.
 
 ### Tests
@@ -145,7 +166,8 @@ The search path is the `--packs` directories, then `packs/` next to the executab
 GDScript tests run headless (`godot --headless --path simulator -s tests/run_tests.gd`), with
 a runner in the repository rather than a third-party add-on. Pure parts are tested directly;
 the link is tested end to end against a test server that speaks the OVCS side of the protocol,
-with the test packs.
+with the test packs. Physics runs at 60 Hz; the runner steps frames as fast as the machine
+goes.
 
 ## Left to the builder
 

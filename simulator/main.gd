@@ -65,7 +65,7 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 	add_child(vehicle)
 	var model: VehicleModel = model_found["model"]
 	vehicle.setup(spec, model)
-	vehicle.global_transform = track.spawn_transform()
+	vehicle.place(track.spawn_transform(), options.hold_speed_m_s if options.hold_given else 0.0)
 	var tiles: TrackTiles = world_found["world"]
 	tiles.follow(vehicle)
 	if options.timing:
@@ -84,7 +84,9 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 		add_child(sender)
 		sender.setup(link, stereo.request_pair, spec.stereo.rate_hz)
 	if options.hold_given:
-		vehicle.command(options.hold_speed_m_s, options.hold_steering_rad)
+		var holder := SpeedDriver.new()
+		add_child(holder)
+		holder.hold(vehicle, options.hold_speed_m_s, options.hold_steering_rad)
 	if options.keyboard:
 		var driver := KeyboardDriver.new()
 		add_child(driver)
@@ -136,9 +138,9 @@ func _drive_from_a_log_and_record(
 		var found := DriveLog.parse(FileAccess.get_file_as_string(options.drive_log_path))
 		if found.has("error"):
 			return "--drive-log %s: %s" % [options.drive_log_path, found["error"]]
-		var driver := DriveLogDriver.new()
+		var driver := SpeedDriver.new()
 		add_child(driver)
-		driver.setup(vehicle, found["log"])
+		driver.follow(vehicle, found["log"])
 		drive_log_s = found["log"].duration_s()
 	if options.recording_directory() == "":
 		return ""

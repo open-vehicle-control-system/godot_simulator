@@ -1,8 +1,7 @@
 class_name LinkTestServer
 extends RefCounted
-## OVCS's side of the simulator link, for tests: accepts the simulator, sends drives and
-## instruments, and
-## collects the headers and bodies the simulator sends.
+## OVCS's side of the simulator link, for tests: accepts the simulator, sends actuations and
+## instruments, and collects the headers and bodies the simulator sends.
 
 var port: int
 var headers: Array[Dictionary] = []
@@ -41,10 +40,31 @@ func connected() -> bool:
 	return _peer != null and _peer.get_status() == StreamPeerTCP.STATUS_CONNECTED
 
 
-func send_drive(speed_m_s: float, steering_rad: float) -> void:
-	## Sends a drive to the connected simulator.
-	_peer.put_data(
-		LinkProtocol.packet({"type": "drive", "speed_m_s": speed_m_s, "steering_rad": steering_rad})
+func send_actuation(
+	drive_torque_nm: float,
+	brake_torque_nm: float,
+	steering_rad: float,
+	driveline_inertia_kg_m2 := 1.0,
+	time_s := 0.0
+) -> void:
+	## Sends an actuation to the connected simulator.
+	(
+		_peer
+		. put_data(
+			(
+				LinkProtocol
+				. packet(
+					{
+						"type": "actuation",
+						"time_s": time_s,
+						"drive_torque_nm": drive_torque_nm,
+						"brake_torque_nm": brake_torque_nm,
+						"steering_rad": steering_rad,
+						"driveline_inertia_kg_m2": driveline_inertia_kg_m2,
+					}
+				)
+			)
+		)
 	)
 
 

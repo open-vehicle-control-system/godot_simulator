@@ -4,50 +4,58 @@ extends TestCase
 var _server: LinkTestServer
 
 
-func test_a_drive_moves_the_vehicle_and_states_report_it_in_ros_frames() -> void:
-	var vehicle := await _linked_vehicle("drive")
+func test_an_actuation_moves_the_vehicle_and_states_report_it_in_ros_frames() -> void:
+	var vehicle := await _linked_vehicle("actuation")
 	await _until_connected()
 
-	for step in 30:
-		_server.send_drive(2.0, 0.0)
+	for step in 60:
+		_server.send_actuation(400.0, 0.0, 0.0, 2.0)
 		await _step_and_poll(1)
 
-	assert_true(vehicle.global_position.z > 0.5, "moved %s" % vehicle.global_position)
+	assert_true(vehicle.global_position.z > 0.3, "moved %s" % vehicle.global_position)
+	assert_eq(vehicle.actuation.drive_torque_n_m, 400.0)
+	assert_eq(vehicle.actuation.driveline_inertia_kg_m2, 2.0)
 	var last: Dictionary = _server.of_type("state").back()
-	assert_almost_eq(last["linear_velocity_m_s"][0], 2.0, 1e-6)
+	assert_almost_eq(last["linear_velocity_m_s"][0], vehicle.speed_m_s, 0.05)
 	assert_almost_eq(last["position_m"][0], vehicle.global_position.z, 0.05)
 	assert_almost_eq(last["odometer_m"], vehicle.odometer_m, 0.05)
+	var front_left: Dictionary = last["wheels"]["front_left"]
+	assert_true(front_left["omega_rad_s"] > 1.0, "the driven wheel turns: %s" % front_left)
+	assert_true(front_left["angle_rad"] > 0.5, "and has turned: %s" % front_left)
+	assert_eq(front_left["in_contact"], true)
 	_server.stop()
 
 
-func test_stops_when_drives_stop() -> void:
+func test_drops_the_drive_when_actuations_stop_keeping_brakes_and_steering() -> void:
 	var vehicle := await _linked_vehicle("timeout")
 	await _until_connected()
-	_server.send_drive(2.0, 0.1)
+	_server.send_actuation(400.0, 30.0, 0.1)
 	await _step_and_poll(5)
 
 	var frames_past_timeout := ceili(
-		(SimulatorLink.DRIVE_TIMEOUT_S + 0.1) * Engine.physics_ticks_per_second
+		(SimulatorLink.ACTUATION_TIMEOUT_S + 0.1) * Engine.physics_ticks_per_second
 	)
 	await _step_and_poll(frames_past_timeout)
 
-	assert_eq(vehicle.speed_m_s, 0.0)
-	assert_almost_eq(vehicle.steering_rad, 0.1, 1e-6, "keeps the last steering")
+	assert_eq(vehicle.actuation.drive_torque_n_m, 0.0)
+	assert_eq(vehicle.actuation.brake_torque_n_m, 30.0)
+	assert_almost_eq(vehicle.actuation.steering_rad, 0.1, 1e-6, "keeps the last steering")
 	_server.stop()
 
 
-func test_stops_and_reconnects_when_the_connection_drops() -> void:
+func test_parks_and_reconnects_when_the_connection_drops() -> void:
 	var vehicle := await _linked_vehicle("reconnect")
 	await _until_connected()
-	_server.send_drive(2.0, 0.0)
+	_server.send_actuation(400.0, 0.0, 0.0)
 	await _step_and_poll(5)
 
 	_server.drop_simulator()
 	await _step_and_poll(5)
-	var speed_after_drop := vehicle.speed_m_s
+	var actuation_after_drop := vehicle.actuation
 	await _until_connected()
 
-	assert_eq(speed_after_drop, 0.0)
+	assert_eq(actuation_after_drop.drive_torque_n_m, 0.0)
+	assert_eq(actuation_after_drop.brake_torque_n_m, vehicle.parking_brake_torque_n_m())
 	assert_true(_server.connected(), "reconnected")
 	_server.stop()
 
@@ -57,10 +65,10 @@ func test_drops_a_packet_it_does_not_read_and_keeps_going() -> void:
 	await _until_connected()
 
 	_server._peer.put_data(LinkProtocol.packet({"type": "teleport"}))
-	_server.send_drive(1.0, 0.0)
+	_server.send_actuation(100.0, 0.0, 0.0)
 	await _step_and_poll(10)
 
-	assert_eq(vehicle.speed_m_s, 1.0)
+	assert_eq(vehicle.actuation.drive_torque_n_m, 100.0)
 	_server.stop()
 
 
@@ -122,6 +130,7 @@ func _linked_vehicle(test_name: String) -> Vehicle:
 	var vehicle := Vehicle.new()
 	world.add_child(vehicle)
 	vehicle.setup(spec, VehicleModel.build(spec)["model"])
+	vehicle.place(Transform3D.IDENTITY)
 	var link := SimulatorLink.new()
 	world.add_child(link)
 	link.setup(vehicle, "127.0.0.1", _server.port)

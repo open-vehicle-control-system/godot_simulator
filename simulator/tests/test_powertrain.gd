@@ -1,5 +1,5 @@
 extends TestCase
-## A vehicle's powertrain: as its pack describes it, the force its motor gives through the
+## A vehicle's powertrain: as its pack describes it, the torque its motor gives through the
 ## selected gear and what the road and the air take back.
 
 const GRAVITY_M_S2 := 9.81
@@ -50,47 +50,33 @@ func test_drag_and_rolling_resistance_hold_the_vehicle_back() -> void:
 		assert_almost_eq(Powertrain.resistance_n(_spec(), case[0]), case[1], 0.01, str(case))
 
 
-func test_a_standing_start_is_held_to_the_driven_axles_grip() -> void:
+func test_an_automatic_gearbox_shifts_up_short_of_the_rpm_limit() -> void:
 	var spec := _spec()
-	spec.powertrain.max_torque_n_m = 400.0
+	spec.powertrain.gear = PowertrainSpec.AUTOMATIC
+	# Held to its torque alone, first pushes twice as hard as second up to where it shifts.
+	spec.powertrain.max_power_w = 1.0e6
+	var shift_m_s := Powertrain.SHIFT_RPM_SHARE * 10000.0 / 60.0 / 8.0 * TAU * 0.3
 
-	var acceleration_m_s2 := Powertrain.full_throttle_acceleration_m_s2(spec, 0.0)
-
-	# The motor would push 9600 N; the front tyres hold less, and push the vehicle's mass.
-	var traction_n := DynamicBicycle.traction_limit_n(spec)
-	assert_true(traction_n < 9600.0 / 1.2, str(traction_n))
-	var expected_m_s2 := (traction_n - Powertrain.resistance_n(spec, 0.0)) / 1200.0
-	assert_almost_eq(acceleration_m_s2, expected_m_s2, 1e-4)
+	assert_eq(Powertrain.gear_at(spec, shift_m_s - 0.1), 1)
+	assert_eq(Powertrain.gear_at(spec, shift_m_s + 0.1), 2)
 
 
-func test_past_the_grip_the_motor_also_spins_up_the_motor_gearbox_and_wheels() -> void:
+func test_the_wheels_get_the_motors_torque_through_the_gear() -> void:
 	var spec := _spec()
-
-	var acceleration_m_s2 := Powertrain.full_throttle_acceleration_m_s2(spec, 20.0)
-
-	# They add to the mass as 1.04 + 0.0025 times the overall ratio squared (Gillespie).
-	var pushing_n := Powertrain.motor_force_n(spec, 1, 20.0) - Powertrain.resistance_n(spec, 20.0)
-	assert_almost_eq(acceleration_m_s2, pushing_n / (1200.0 * (1.04 + 0.0025 * 64.0)), 1e-4)
+	# 250 Nm through 8 at 90 %; past 10,000 rpm in first (wheels at 130.9 rad/s), nothing.
+	var cases := [[0.0, 1800.0], [-20.0, 1800.0], [131.0, 0.0]]
+	for case in cases:
+		assert_almost_eq(Powertrain.wheel_torque_n_m(spec, 1, case[0]), case[1], 0.01, str(case))
 
 
-func test_coasting_slows_by_drag_and_rolling_resistance() -> void:
+func test_the_driveline_turns_with_the_wheels_heavier_in_a_lower_gear() -> void:
 	var spec := _spec()
 
-	var deceleration_m_s2 := Powertrain.coasting_deceleration_m_s2(spec, 20.0)
+	var first := Powertrain.driveline_inertia_kg_m2(spec, 1)
+	var second := Powertrain.driveline_inertia_kg_m2(spec, 2)
 
-	var expected_m_s2 := Powertrain.resistance_n(spec, 20.0) / (1200.0 * (1.04 + 0.0025 * 64.0))
-	assert_almost_eq(deceleration_m_s2, expected_m_s2, 1e-6)
-
-
-func test_the_top_speed_is_the_rpm_limit_in_the_highest_gear_it_may_use() -> void:
-	var spec := _spec()
-	var cases := {1: 8.0, 2: 4.0, PowertrainSpec.AUTOMATIC: 4.0}
-	for gear in cases:
-		spec.powertrain.gear = gear
-
-		var top_m_s := Powertrain.rpm_limited_speed_m_s(spec)
-
-		assert_almost_eq(top_m_s, 10000.0 / 60.0 / cases[gear] * TAU * 0.3, 1e-4, str(gear))
+	assert_almost_eq(first, 0.0025 * 64.0 * 1200.0 * 0.09, 1e-9)
+	assert_almost_eq(first / second, 4.0, 1e-9)
 
 
 func test_reads_the_powertrain() -> void:

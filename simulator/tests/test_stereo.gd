@@ -143,9 +143,10 @@ func test_sends_jpeg_pairs_at_the_camera_rate_with_one_time_per_pair() -> void:
 	add_child(sender)
 
 	sender.setup(link, _hand_over_solid_pair, 10.0)
-	await _poll_until(server, func(): return not server.of_type("image").is_empty())
+	# Encoding takes real time: the pairs come at the camera's rate in a run's time.
+	await _poll_until(server, func(): return not server.of_type("image").is_empty(), true)
 	var started_s: float = server.of_type("image")[0]["time_s"]
-	await _poll_until(server, func(): return link.time_s - started_s >= 1.1)
+	await _poll_until(server, func(): return link.time_s - started_s >= 1.1, true)
 
 	var images := server.of_type("image")
 	var in_one_second := images.filter(func(image): return image["time_s"] < started_s + 0.95)
@@ -215,13 +216,18 @@ func _vehicle() -> Vehicle:
 	var vehicle := Vehicle.new()
 	add_child(vehicle)
 	vehicle.setup(spec, VehicleModel.build(spec)["model"])
+	vehicle.place(Transform3D.IDENTITY)
 	await wait_physics_frames(1)
 	return vehicle
 
 
-func _poll_until(server: LinkTestServer, condition: Callable) -> void:
+func _poll_until(server: LinkTestServer, condition: Callable, real_time := false) -> void:
+	## Polls `server` each physics step until `condition` holds; in `real_time`, a step takes
+	## as long as it does in a run (the test runner steps faster).
 	for frame in 5 * Engine.physics_ticks_per_second:
 		await get_tree().physics_frame
+		if real_time:
+			OS.delay_usec(1000000 / Engine.physics_ticks_per_second)
 		server.poll()
 		if condition.call():
 			return

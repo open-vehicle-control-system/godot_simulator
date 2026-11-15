@@ -92,10 +92,12 @@ for a vehicle; x, y, z up for a world.
 ```
 
 - The origin is on the ground; axle positions are along x.
-- `dynamics` is what the [dynamic bicycle model](./architecture.md#the-vehicles-motion) moves
-  the vehicle by: every physical property of it is here, none in the simulator. The values
-  typical of a mid-size front-wheel drive sedan, and where they come from, are in
-  `tools/vehicle_dynamics.py`.
+- `dynamics` is what the [vehicle's body, suspension and tyres](./architecture.md#the-vehicles-motion)
+  are made of: every physical property the pack gives is here. The values typical of a
+  mid-size front-wheel drive sedan, and where they come from, are in
+  `tools/vehicle_dynamics.py`. What no pack gives (ride frequency and damping, suspension
+  travel, roll gradient, relaxation lengths, longitudinal slip stiffness, wheel inertia) the
+  simulator derives from these and the wheel radius, as the architecture describes.
 
   | Field | Meaning | Unit, range | Typical |
   |---|---|---|---|
@@ -106,24 +108,24 @@ for a vehicle; x, y, z up for a world.
   | `driven_axle` | which wheels carry traction | `front`, `rear` or `all` | |
   | `brake_bias_front` | the front brakes' share of the braking, by design | 0 to 1 | 0.65 to 0.75 |
   | `rear_brake_margin` | how far below the rear axle's share of the load the rear's share of the braking is kept, as a proportioning valve or EBD does; negative lets the rear brake beyond its load, -1 never holds it back | -1 to below 1 | 0.05 |
-  | `front_roll_stiffness_share` | the front axle's share of the load cornering moves from the inner wheels to the outer ones (its share of the roll stiffness) | above 0, below 1 | 0.6 to 0.75 |
+  | `front_roll_stiffness_share` | the front axle's share of the roll stiffness: of the load cornering moves from the inner wheels to the outer ones | above 0, below 1 | 0.6 to 0.75 |
   | `friction` | the tyres' peak friction coefficient at their static load: the grip, `friction` × g, is the hardest the vehicle ever corners | above 0, below 3 | 1.0 on dry asphalt, 0.9 for eco tyres |
-  | `front_cornering_stiffness_n_per_rad`, `rear_cornering_stiffness_n_per_rad` | an axle's side force per radian of slip, both tyres, at its static load, effective (with the suspension's compliance) | N/rad, above 0 | 12.5 (front) and 22 (rear) × the axle's static load in N |
+  | `front_cornering_stiffness_n_per_rad`, `rear_cornering_stiffness_n_per_rad` | an axle's side force per radian of slip, both tyres together, at its static load, effective (with the suspension's compliance) | N/rad, above 0 | 12.5 (front) and 22 (rear) × the axle's static load in N |
   | `cornering_stiffness_load_exponent` | a tyre's cornering stiffness grows with its load to this power | 0 to 1 | 0.7 |
   | `friction_load_sensitivity` | the share of its friction a tyre loses per unit of load over its static load, so moving load across an axle loses grip | 0 to below 1 | 0.1 to 0.3 |
   | `tyre_shape` | Pacejka's C: sliding, a tyre keeps sin(C × 90°) of its peak force | above 1, below 2 | 1.3 (90 %) |
   | `tyre_curvature` | Pacejka's E: how early the force peaks; below 0 the peak comes at a smaller slip | -10 to below 1 | -1.5 |
 
-  An axle's side force is Pacejka's magic formula `D sin(C atan(B α - E (B α - atan(B α))))`,
-  with D its grip and B its stiffness over C D. With the typical values the force peaks near
-  6° of slip at the rear and 10° at the front, the sedan understeers by about 2° per g
-  (ISO 4138) and braking at 0.6 g in a 0.57 g turn tightens its line a little without a slide
-  (ISO 7975).
+  A tyre's force is Pacejka's magic formula `D sin(C atan(B s - E (B s - atan(B s))))` over its
+  combined slip s, with D its grip and B its stiffness over C D; each tyre has half its axle's
+  cornering stiffness. With the typical values the sedan understeers by about 2.5° per g.
 - `powertrain` is what drives the vehicle under `--keyboard`
   ([Driven by the keys](./architecture.md#driven-by-the-keys)); which axle it drives is
-  `dynamics.driven_axle`. Under OVCS the speed is OVCS's, and OVCS's simulated hardware has its
-  own motor-to-wheel ratio (for OVCS1, `Ovcs1.Simulation` in the OVCS repository). Sources for the values of the vehicles built here are in their builders
-  (`tools/default_vehicle.py`, `tools/pack_experiment.py`).
+  `dynamics.driven_axle`. Its drag area and rolling resistance hold the vehicle back however it
+  is driven. Under OVCS the drive torque is OVCS's, from its own simulated motor and gearbox
+  (for OVCS1, `Ovcs1.Simulation` in the OVCS repository). Sources for the values of the
+  vehicles built here are in their builders (`tools/default_vehicle.py`,
+  `tools/pack_experiment.py`).
 
   | Field | Meaning | Unit, range | Typical |
   |---|---|---|---|
@@ -132,13 +134,14 @@ for a vehicle; x, y, z up for a world.
   | `motor.max_rpm` | its rpm limit: it gives nothing at or beyond it | rpm, above 0 | 6000 to 7000 (petrol), 10,000 or more (electric) |
   | `gear_ratios` | each gear's ratio, first gear first: motor turns per gearbox output turn | one or more, above 0 | |
   | `final_drive_ratio` | the differential's ratio: gearbox output turns per wheel turn | above 0 | 3 to 4.5 |
-  | `gear` | the gear in use, from 1, or `"automatic"` for the gear that pushes hardest at the speed | a gear the gearbox has, or `"automatic"` | |
+  | `gear` | the gear in use, from 1, or `"automatic"` for the gear that pushes hardest at the speed, shifting up short of the rpm limit | a gear the gearbox has, or `"automatic"` | |
   | `driveline_efficiency` | the share of the motor's torque the wheels get | above 0, at most 1 | 0.9 |
   | `rolling_resistance_coefficient` | rolling resistance per unit of weight | above 0, below 1 | 0.010 to 0.015 |
   | `drag_area_m2` | the drag coefficient times the frontal area | m², above 0 | 0.6 to 0.75 |
 
   `--set=vehicle.powertrain.gear=3` runs a vehicle in another gear.
-- `body` is a box: the placeholder drawn when there is no `model`.
+- `body` is a box: the placeholder drawn when there is no `model`, and the body that collides
+  with the world, raised at least 0.6 wheel radii off the ground.
 - Lengths, the wheel radius, the stereo resolution, baseline and rate are positive, the
   dynamics and powertrain within the ranges above, the field of view under 180°, and the front axle ahead of the rear one;
   a pack that breaks this is refused.

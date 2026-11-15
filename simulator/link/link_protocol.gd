@@ -3,16 +3,26 @@ extends RefCounted
 ## The OVCS simulator link's packets (OVCS SimulatorCore.Link.Protocol). Pure.
 ##
 ## On the wire each packet is a 32-bit big-endian length, then the payload: a 16-bit big-endian
-## header length, a JSON header and the message's binary body, if any. `drive` and `instruments`
-## come from OVCS; `state` and `image` go to it. Fields follow ROS conventions (REP-103): SI
-## units, base_link x forward, y left, z up. Godot's vehicle frame is +X left, +Y up, +Z
-## forward, so a ROS vector (x, y, z) is the Godot (z, x, y); worlds map the same way.
+## header length, a JSON header and the message's binary body, if any. `actuation` and
+## `instruments` come from OVCS; `state` and `image` go to it. Fields follow ROS conventions
+## (REP-103): SI units, base_link x forward, y left, z up. Godot's vehicle frame is +X left, +Y
+## up, +Z forward, so a ROS vector (x, y, z) is the Godot (z, x, y); worlds map the same way.
 
 ## The largest packet OVCS reads.
 const MAX_PACKET_BYTES := 16 * 1024 * 1024
 const MAX_HEADER_BYTES := 65535
 ## The number fields of each message OVCS sends.
-const FIELDS := {"drive": ["speed_m_s", "steering_rad"], "instruments": ["motor_rpm"]}
+const FIELDS := {
+	"actuation":
+	[
+		"time_s",
+		"drive_torque_nm",
+		"brake_torque_nm",
+		"steering_rad",
+		"driveline_inertia_kg_m2",
+	],
+	"instruments": ["motor_rpm"],
+}
 
 
 ## Splits a byte stream into payloads.
@@ -56,8 +66,9 @@ static func packet(header: Dictionary, body := PackedByteArray()) -> PackedByteA
 
 static func encode_state(state: Dictionary) -> PackedByteArray:
 	## A `state` packet. `state` holds `time_s`, `odometer_m`, `pose` (the vehicle's Transform3D in
-	## the Godot world) and, in the Godot vehicle frame, `linear_velocity_m_s`,
-	## `angular_velocity_rad_s` and `linear_acceleration_m_s2` (what an IMU reads, gravity included).
+	## the Godot world), in the Godot vehicle frame `linear_velocity_m_s`,
+	## `angular_velocity_rad_s` and `linear_acceleration_m_s2` (what an IMU reads, gravity
+	## included), and `wheels` (Vehicle.wheel_states), sent as they are.
 	var pose: Transform3D = state["pose"]
 	var rotation := pose.basis.orthonormalized().get_rotation_quaternion()
 	return packet(
@@ -70,6 +81,7 @@ static func encode_state(state: Dictionary) -> PackedByteArray:
 			"linear_velocity_m_s": to_ros(state["linear_velocity_m_s"]),
 			"angular_velocity_rad_s": to_ros(state["angular_velocity_rad_s"]),
 			"linear_acceleration_m_s2": to_ros(state["linear_acceleration_m_s2"]),
+			"wheels": state["wheels"],
 		}
 	)
 
@@ -82,8 +94,8 @@ static func encode_image(
 
 
 static func decode(payload: PackedByteArray) -> Dictionary:
-	## The message in `payload` (`{"type": "drive", "speed_m_s", "steering_rad"}` or
-	## `{"type": "instruments", "motor_rpm"}`), or `{"error": reason}`.
+	## The message in `payload` (`{"type": "actuation"}` or `{"type": "instruments"}` with the
+	## message's FIELDS as floats), or `{"error": reason}`.
 	if payload.size() < 2:
 		return {"error": "truncated"}
 	var header_length := (payload[0] << 8) | payload[1]

@@ -225,10 +225,10 @@ func test_a_vehicle_at_speed_always_has_collision_under_it() -> void:
 	world.add_child(vehicle)
 	vehicle.setup(spec, VehicleModel.build(spec)["model"])
 	# Heading +X, which the tiles lie along.
-	vehicle.global_transform = Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(5.0, 0.0, 0.0))
+	vehicle.place(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(5.0, 0.0, 0.0)), 90.0)
 	world.follow(vehicle)
 
-	vehicle.command(90.0, 0.0)
+	VehicleFixtures.hold(self, vehicle, 90.0, 0.0)
 	var frames_off_the_ground := 0
 	for frame in 8 * Engine.physics_ticks_per_second:
 		await get_tree().physics_frame

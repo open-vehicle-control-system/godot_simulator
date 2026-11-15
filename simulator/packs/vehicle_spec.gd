@@ -73,7 +73,6 @@ var brake_bias_front: float  ## the front brakes' share of the braking, by desig
 var rear_brake_margin: float
 var front_roll_stiffness_share: float  ## the front's share of the load cornering moves outwards
 var friction: float  ## the tyres' peak friction coefficient at their static load
-var max_lateral_acceleration_m_s2: float  ## the grip, `friction` times g: the hardest it corners
 var front_cornering_stiffness_n_per_rad: float  ## the front axle's at its static load
 var rear_cornering_stiffness_n_per_rad: float
 var cornering_stiffness_load_exponent: float  ## stiffness grows with the load to this power
@@ -136,7 +135,7 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 
 
 func _read_dynamics(reader: ManifestReader) -> void:
-	## What the dynamic bicycle model moves the vehicle by.
+	## What the vehicle's body, suspension and tyres are made of (Vehicle, Wheels, Tyre).
 	var at := "vehicle.dynamics."
 	mass_kg = reader.positive(at + "mass_kg")
 	centre_of_gravity_z = reader.number(at + "centre_of_gravity_x_m")
@@ -153,7 +152,6 @@ func _read_dynamics(reader: ManifestReader) -> void:
 	reader.check(rear_brake_margin >= -1.0 and rear_brake_margin < 1.0, at + "rear_brake_margin")
 	front_roll_stiffness_share = reader.positive(at + "front_roll_stiffness_share", 1.0)
 	friction = reader.positive(at + "friction", MAX_FRICTION)
-	max_lateral_acceleration_m_s2 = friction * DynamicBicycle.GRAVITY_M_S2
 	front_cornering_stiffness_n_per_rad = reader.positive(
 		at + "front_cornering_stiffness_n_per_rad"
 	)
