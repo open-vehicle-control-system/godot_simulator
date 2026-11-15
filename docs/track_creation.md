@@ -485,8 +485,8 @@ texture.
 
 - **The simulator ships no third-party content.** Shaders and material logic live in
   `simulator/`; textures, surface maps and track data belong to the pack and are named in its
-  `pack.json`. Its only bundled packs are the generated defaults (`tools/default_packs.py`,
-  CC0, committed in `simulator/default_packs/`), which follow these rules too.
+  `pack.json`. Its only bundled packs are the defaults (`tools/default_packs.py`, committed in
+  `simulator/default_packs/`), which follow these rules too.
 - **Packs are data**, never code, and are released on their own.
 - **Only redistributable sources.** CC0 texture sets (Poly Haven, ambientCG), each credited in
   the pack's `attribution`. Geodata keeps its licence: the Wallonia LiDAR and orthophotos are

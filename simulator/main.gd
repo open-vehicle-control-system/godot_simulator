@@ -22,8 +22,8 @@ func _ready() -> void:
 	var library := PackLibrary.scan(_pack_directories(options))
 	for problem in library.errors:
 		push_warning("packs: %s" % problem)
-	var track_found := library.load_track(options.track)
-	var vehicle_found := library.load_vehicle(options.vehicle)
+	var track_found := library.load_track(options.track, options.pack_settings)
+	var vehicle_found := library.load_vehicle(options.vehicle, options.pack_settings)
 	for found in [track_found, vehicle_found]:
 		if found.has("error"):
 			_quit_with("%s (packs: %s)" % [found["error"], ", ".join(_pack_directories(options))])

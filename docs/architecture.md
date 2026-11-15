@@ -84,27 +84,36 @@ for half a second, or no link, it is commanded to stop.
 
 How it turns is a dynamic bicycle model (`DynamicBicycle`), one axle at each end, about the
 centre of gravity: the vehicle can point elsewhere than it goes. Each axle's side force grows
-with its slip angle (the angle between where its wheels roll and where they go), at first by the
-pack's cornering stiffness, up to a peak of its load times the grip (the pack's
-`max_lateral_acceleration_m_s2` over g), then falls a little as the tyres slide (a simplified
-Pacejka curve, shape 1.3). Braking moves load onto the front axle and accelerating onto the rear
-(mass × acceleration × centre-of-gravity height / wheelbase), and an axle's stiffness and grip
-follow its load. The force an axle carries along the road, to change the speed or to hold it
-while sliding, takes its share of the grip (the friction circle): braking is shared by axle load,
-traction goes to the pack's `driven_axle`. Steady cornering never exceeds the grip. Taken gently,
-corners follow the kinematic path; past the grip the front axle runs wide (understeer), and
-braking or lifting off in a fast corner unloads the rear, which slides: the tail swings out, and
-held long enough the vehicle spins. Steering into the slide catches it. The model steps in
-substeps of at most 4 ms (and half its fastest time constant), and below 1 to 3 m/s it blends
-into the kinematic bicycle model about the rear axle, so parking and standing still are steady.
-Over a wall, the slide loses the share of speed the wall takes. The tyres pass on at most their
-grip along the road, whatever the speed command asks.
+with its slip angle (the angle between where its wheels roll and where they go), at first by its
+cornering stiffness, up to a peak of its grip, then falls a little as the tyres slide (Pacejka's
+magic formula). Braking moves load onto the front axle and accelerating onto the rear (mass ×
+acceleration × centre-of-gravity height / wheelbase); cornering moves load from the inner wheels
+to the outer ones, shared between the axles by roll stiffness. A tyre's stiffness grows less
+than its load and its friction falls as its load rises, so the more loaded axle, and the axle
+whose load cornering moves across most (the front, on a road car), loses grip: the vehicle
+understeers at the limit. The force an axle carries along the road, to change the speed or to
+hold it while sliding, takes its share of the grip (the friction circle): braking is split by the
+brakes' bias, the rear kept below its share of the load as a proportioning valve does, traction
+goes to the driven axle. Steady cornering never exceeds the grip. Every property of the vehicle
+is its pack's `vehicle.dynamics` ([Pack format](./pack_format.md#vehicle-packs)); `--set`
+overrides one for a run, to tune it.
+
+Taken gently, corners follow the kinematic path. A road car as `tools/vehicle_dynamics.py`
+describes it behaves as standard tests measure production cars: it understeers by about 2° per
+g (ISO 4138), braking at 0.6 g in a 60 km/h, 50 m turn tightens its line a little without a
+slide (ISO 7975), and lifting off at the limit tucks its nose in. Brakes biased to the rear
+without a proportioning valve, or soft rear tyres, slide the tail out and can spin it; steering
+into the slide catches it. The model steps in substeps of at most 4 ms (and half its fastest time
+constant), and below 1 to 3 m/s it blends into the kinematic bicycle model about the rear axle,
+so parking and standing still are steady. Over a wall, the slide loses the share of speed the
+wall takes. The tyres pass on at most their grip along the road, whatever the speed command
+asks.
 
 The state OVCS reads is the origin's: the speed along the heading, the lateral velocity and yaw
 rate from the model, and what an IMU there reads, the model's lateral acceleration (plus the yaw
 acceleration's share at the origin) and gravity's reaction. The odometer counts the part of each
 move along the heading: what the wheels roll. There is no longitudinal tyre slip (the speed is
-OVCS's), no load transfer between left and right, no suspension dynamics and no aerodynamics; a
+OVCS's), no suspension dynamics (load moves across at once) and no aerodynamics; a
 vehicle moved by its own forces is OVCS's TASK-81.
 
 The vehicle does not pass through what it hits. Before every move its body box (raised off the
@@ -309,7 +318,8 @@ Nothing in the simulator names a track or a vehicle. Packs are data directories 
 runtime: see [Pack format](./pack_format.md).
 
 The simulator bundles two packs in `simulator/default_packs/` (a `.gdignore` keeps Godot from
-importing them): `default_track` and `default_car`, generated from code by
-`tools/default_packs.py` and CC0. `main.gd` searches that directory last, and
+importing them): `default_track` and `default_car`, built by `tools/default_packs.py`: the
+track from code, CC0; the car from "Generic Sedan Car" by Márcio Meireles, CC BY 4.0, credited
+in its pack. `main.gd` searches that directory last, and
 `SimulatorOptions` selects them when `--track` or `--vehicle` is left out; nothing else in
 the simulator knows them.

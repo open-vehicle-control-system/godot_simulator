@@ -207,3 +207,34 @@ func test_record_and_drive_log_are_refused_with_what_they_cannot_go_with() -> vo
 	for problem in cases:
 		var arguments := PackedStringArray(["--track=t", "--vehicle=v"] + cases[problem])
 		assert_eq(SimulatorOptions.parse(arguments), {"error": problem})
+
+
+func test_set_overrides_pack_fields_in_order() -> void:
+	var arguments := PackedStringArray(
+		[
+			"--set=vehicle.dynamics.brake_bias_front=0.65",
+			"--set=track.sun.azimuth_deg=-30",
+			"--set=vehicle.dynamics.driven_axle=rear",
+		]
+	)
+
+	var options: SimulatorOptions = SimulatorOptions.parse(arguments)["options"]
+
+	assert_eq(
+		options.pack_settings,
+		[
+			["vehicle.dynamics.brake_bias_front", 0.65],
+			["track.sun.azimuth_deg", -30.0],
+			["vehicle.dynamics.driven_axle", "rear"],
+		]
+	)
+
+
+func test_set_takes_a_vehicle_or_track_field_and_a_value() -> void:
+	for argument in [
+		"--set=dynamics.friction=1", "--set=vehicle.dynamics.friction", "--set=vehicle.=1"
+	]:
+		var parsed := SimulatorOptions.parse(PackedStringArray([argument]))
+
+		var problem: String = parsed.get("error", "")
+		assert_true(problem.begins_with("--set is PATH=VALUE, PATH a field of"), argument)

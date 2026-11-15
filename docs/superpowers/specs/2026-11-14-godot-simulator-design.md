@@ -10,8 +10,10 @@ Tracks and vehicles are content, released on their own schedule and under their 
 apart from the simulator.
 
 The one exception is a pair of bundled defaults, so a clean clone runs with one command: a
-small test circuit and a generic compact car, generated from code alone (no external data)
-by `tools/default_packs.py`, CC0, and committed as built in `simulator/default_packs/`.
+small test circuit and a mid-size sedan, built by `tools/default_packs.py` and committed as
+built in `simulator/default_packs/`. The track is generated from code alone, CC0; the car's
+model is the one exception to generated, CC0 content: "Generic Sedan Car" by Márcio Meireles
+(MMC Works), CC BY 4.0, credited with its modifications in the pack.
 
 ## Goals
 
@@ -19,7 +21,7 @@ by `tools/default_packs.py`, CC0, and committed as built in `simulator/default_p
 - Report the vehicle's state and a rectified stereo pair over the link, and record pairs,
   poses and calibration to disk for offline vision work.
 - Load tracks and vehicles from packs found at runtime; none ship with the simulator but the
-  generated, CC0 defaults.
+  two defaults (CC0, but for the default car's credited CC BY 4.0 model).
 - Follow the OVCS development process and code rules, adapted to GDScript and Python.
 
 ## Non-goals
@@ -81,7 +83,7 @@ by `tools/default_packs.py`, CC0, and committed as built in `simulator/default_p
    released as its own archive), `tools/` (the Python builders that generate packs from public
    data). Generated pack payloads are not committed, only what builds them, except the tiny
    test packs the simulator's tests load and the bundled defaults (`simulator/default_packs/`,
-   CC0, small enough to sit in the repository).
+   small enough to sit in the repository).
 2. **One repository per pack.** Cleanest licence boundary, but a format change then spans many
    repositories while the format is still young. A pack can move to its own repository later
    without changing the format.

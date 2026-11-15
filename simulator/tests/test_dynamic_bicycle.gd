@@ -1,13 +1,16 @@
 extends TestCase
-## The dynamic bicycle model: tyres that slip, so a fast corner can swing the tail out, slide and
-## spin, while slow driving follows the kinematic path.
+## The dynamic bicycle model: tyres that slip, held to what standard tests measure on a
+## production front-wheel drive sedan (ISO 4138 steady-state circular driving, ISO 7975 braking
+## in a turn), while slow driving follows the kinematic path.
 
 const STEP_S := 1.0 / 60.0
-const WHEELBASE_M := 2.5
-const GRIP_M_S2 := 7.8
-const CORNER_SPEED_M_S := 22.0
-## At CORNER_SPEED_M_S this steering corners at about two thirds of the grip.
-const CORNER_STEERING_RAD := 0.04
+const GRAVITY_M_S2 := 9.81
+const WHEELBASE_M := 2.915
+const FRICTION := 1.0
+const GRIP_M_S2 := FRICTION * GRAVITY_M_S2
+## ISO 7975's turn: 60 km/h on a 50 m radius, about 0.57 g.
+const TURN_RADIUS_M := 50.0
+const TURN_SPEED_M_S := 60.0 / 3.6
 
 
 func test_slow_gentle_turns_follow_the_kinematic_path() -> void:
@@ -21,7 +24,9 @@ func test_slow_gentle_turns_follow_the_kinematic_path() -> void:
 		var speed_m_s: float = cases[case][0]
 		var steering_rad: float = cases[case][1]
 
-		var motion := _drive(DynamicBicycle.rolling(0.0, speed_m_s), speed_m_s, steering_rad, 10.0)
+		var motion := _drive(
+			_spec(), DynamicBicycle.rolling(0.0, speed_m_s), speed_m_s, steering_rad, 10.0
+		)
 
 		var kinematic_rad_s := speed_m_s * tan(steering_rad) / WHEELBASE_M
 		var yaw_rate_rad_s: float = motion["yaw_rate_rad_s"]
@@ -29,7 +34,7 @@ func test_slow_gentle_turns_follow_the_kinematic_path() -> void:
 
 
 func test_parking_speeds_turn_exactly_as_the_kinematic_model() -> void:
-	var motion := _drive(DynamicBicycle.rolling(0.0, 0.5), 0.5, 0.5, 2.0)
+	var motion := _drive(_spec(), DynamicBicycle.rolling(0.0, 0.5), 0.5, 0.5, 2.0)
 
 	assert_almost_eq(motion["yaw_rate_rad_s"], 0.5 * tan(0.5) / WHEELBASE_M, 1e-9)
 
@@ -49,62 +54,111 @@ func test_cornering_never_exceeds_the_grip() -> void:
 
 
 func test_cornering_at_the_limit_reaches_most_of_the_grip() -> void:
-	var motion := _drive(DynamicBicycle.rolling(0.0, 25.0), 25.0, 0.06, 6.0)
+	var motion := _drive(_spec(), DynamicBicycle.rolling(0.0, 25.0), 25.0, 0.1, 6.0)
 
-	assert_true(motion["lateral_acceleration_m_s2"] > GRIP_M_S2 * 0.85, str(motion))
-
-
-func test_braking_into_a_fast_corner_swings_the_tail_out() -> void:
-	var cases := {"trail braking at 0.4 g": 4.0, "braking at 0.6 g": 6.0}
-	for case in cases:
-		var deceleration_m_s2: float = cases[case]
-		var cornering := _corner()
-		var turned_in_sideslip_rad := _sideslip_rad(cornering)
-
-		var braked := _brake(cornering, deceleration_m_s2, 0.75, CORNER_STEERING_RAD)
-
-		var speed_m_s: float = braked["speed_m_s"]
-		var path_rad_s := speed_m_s * tan(CORNER_STEERING_RAD) / WHEELBASE_M
-		assert_true(
-			_sideslip_rad(braked) < turned_in_sideslip_rad - deg_to_rad(4.0),
-			"%s: sideslip %.1f deg" % [case, rad_to_deg(_sideslip_rad(braked))]
-		)
-		assert_true(
-			braked["yaw_rate_rad_s"] > path_rad_s * 1.3,
-			"%s: yaw rate %.2f, path %.2f" % [case, braked["yaw_rate_rad_s"], path_rad_s]
-		)
+	assert_true(motion["lateral_acceleration_m_s2"] > GRIP_M_S2 * 0.8, str(motion))
 
 
-func test_a_steady_corner_keeps_its_sideslip_small() -> void:
-	var cornering := _corner()
-
-	assert_true(absf(_sideslip_rad(cornering)) < deg_to_rad(3.0), str(cornering))
-
-
-func test_braking_hard_through_a_fast_corner_spins() -> void:
-	var braked := _brake(_corner(), 6.0, 2.0, CORNER_STEERING_RAD)
+func test_understeers_by_one_to_four_degrees_per_g() -> void:
+	# ISO 4138, constant radius: the steering a 50 m circle takes, from 0.1 g to 0.4 g.
+	var gradient_deg_per_g := _understeer_gradient_deg_per_g(_spec())
 
 	assert_true(
-		_sideslip_rad(braked) < -deg_to_rad(45.0),
-		"sideslip %.1f deg" % rad_to_deg(_sideslip_rad(braked))
+		gradient_deg_per_g > 1.0 and gradient_deg_per_g < 4.0, "%.2f deg/g" % gradient_deg_per_g
 	)
 
 
+func test_softer_rear_tyres_turn_understeer_into_oversteer() -> void:
+	var spec := _spec()
+	spec.rear_cornering_stiffness_n_per_rad *= 0.5
+
+	var gradient_deg_per_g := _understeer_gradient_deg_per_g(spec)
+
+	assert_true(gradient_deg_per_g < 0.0, "%.2f deg/g" % gradient_deg_per_g)
+
+
+func test_braking_in_a_turn_tightens_the_line_a_little() -> void:
+	# ISO 7975: settled at 60 km/h on 50 m, then braking with the steering held. The yaw rate
+	# a second later, over the one that keeps the radius at that speed, and the sideslip.
+	var cases := {"0.4 g": 0.4, "0.6 g": 0.6}
+	for case in cases:
+		var spec := _spec()
+
+		var braked := _brake(
+			spec, _turning(spec), cases[case] * GRAVITY_M_S2, 1.0, _turn_steering(spec)
+		)
+
+		var yaw_ratio := _yaw_ratio(braked["motion"])
+		var message := (
+			"%s: yaw ratio %.2f, sideslip up to %.1f deg"
+			% [case, yaw_ratio, rad_to_deg(braked["most_sideslip_rad"])]
+		)
+		assert_true(yaw_ratio > 1.0 and yaw_ratio < 1.5, message)
+		assert_true(braked["most_sideslip_rad"] < deg_to_rad(5.0), message)
+
+
+func test_lifting_off_at_the_limit_tucks_in_without_a_slide() -> void:
+	var spec := _spec()
+	var speed_m_s := sqrt(0.8 * GRAVITY_M_S2 * TURN_RADIUS_M)
+	var steering_rad := _steering_for_radius(spec, speed_m_s)
+	var turning := _drive(
+		spec, DynamicBicycle.rolling(0.0, speed_m_s), speed_m_s, steering_rad, 4.0
+	)
+
+	var lifted := _brake(spec, turning, 0.25 * GRAVITY_M_S2, 1.0, steering_rad)
+
+	var yaw_ratio := _yaw_ratio(lifted["motion"])
+	var message := (
+		"yaw ratio %.2f, sideslip up to %.1f deg"
+		% [yaw_ratio, rad_to_deg(lifted["most_sideslip_rad"])]
+	)
+	assert_true(yaw_ratio > 1.0 and yaw_ratio < 1.6, message)
+	assert_true(lifted["most_sideslip_rad"] < deg_to_rad(5.0), message)
+
+
+func test_braking_the_rear_beyond_its_load_slides_the_tail_out() -> void:
+	var cases := {
+		"the sedan's brakes": [0.7, 0.05, 0.0, 5.0],
+		"rear-biased, without proportioning": [0.4, -1.0, 15.0, 180.0],
+	}
+	for case in cases:
+		var spec := _spec()
+		spec.brake_bias_front = cases[case][0]
+		spec.rear_brake_margin = cases[case][1]
+
+		var braked := _brake(spec, _turning(spec), 0.6 * GRAVITY_M_S2, 1.0, _turn_steering(spec))
+
+		var most_deg := rad_to_deg(braked["most_sideslip_rad"])
+		assert_true(
+			most_deg >= cases[case][2] and most_deg < cases[case][3],
+			"%s: sideslip up to %.1f deg" % [case, most_deg]
+		)
+
+
 func test_steering_into_the_slide_catches_it() -> void:
-	var sliding := _brake(_corner(), 4.0, 0.75, CORNER_STEERING_RAD)
-	var held := sliding
+	var spec := _spec()
+	spec.brake_bias_front = 0.4
+	spec.rear_brake_margin = -1.0
+	var steering_rad := _turn_steering(spec)
+	var braked := _brake(spec, _turning(spec), 0.6 * GRAVITY_M_S2, 0.5, steering_rad)
+	var sliding: Dictionary = braked["motion"]
 	var caught := sliding
 
 	for step in roundi(1.5 / STEP_S):
-		held = DynamicBicycle.advance(held, _spec(), held["speed_m_s"], CORNER_STEERING_RAD, STEP_S)
 		var into_the_slide_rad := clampf(_sideslip_rad(caught), -0.5, 0.5)
 		caught = DynamicBicycle.advance(
-			caught, _spec(), caught["speed_m_s"], into_the_slide_rad, STEP_S
+			caught, spec, caught["speed_m_s"], into_the_slide_rad, STEP_S
 		)
 
+	assert_true(absf(_sideslip_rad(sliding)) > deg_to_rad(5.0), "sliding: %s" % sliding)
 	assert_true(absf(_sideslip_rad(caught)) < deg_to_rad(1.0), "caught: %s" % caught)
 	assert_true(absf(caught["yaw_rate_rad_s"]) < 0.05, "caught: %s" % caught)
-	assert_true(absf(_sideslip_rad(held)) > deg_to_rad(5.0), "held: %s" % held)
+
+
+func test_a_steady_corner_keeps_its_sideslip_small() -> void:
+	var turning := _turning(_spec())
+
+	assert_true(absf(_sideslip_rad(turning)) < deg_to_rad(3.0), str(turning))
 
 
 func test_standing_still_stays_still_whatever_the_steering() -> void:
@@ -151,7 +205,7 @@ func test_reports_the_longitudinal_acceleration_of_the_speed_change() -> void:
 
 
 func test_a_steady_turns_lateral_acceleration_is_speed_times_yaw_rate() -> void:
-	var motion := _drive(DynamicBicycle.rolling(0.0, 10.0), 10.0, 0.05, 6.0)
+	var motion := _drive(_spec(), DynamicBicycle.rolling(0.0, 10.0), 10.0, 0.05, 6.0)
 
 	assert_almost_eq(
 		motion["lateral_acceleration_m_s2"], 10.0 * float(motion["yaw_rate_rad_s"]), 0.02
@@ -160,43 +214,87 @@ func test_a_steady_turns_lateral_acceleration_is_speed_times_yaw_rate() -> void:
 
 
 func _spec() -> VehicleSpec:
-	## A small car: 48 % of its weight on the front axle, front-wheel drive.
+	## A mid-size front-wheel drive sedan: 1350 kg, 60 % of it on the front axle.
 	var spec := VehicleSpec.new()
-	spec.front_axle_z = 1.2
-	spec.rear_axle_z = -1.3
-	spec.centre_of_gravity_z = -0.1
-	spec.centre_of_gravity_height_m = 0.53
-	spec.mass_kg = 1230.0
-	spec.yaw_inertia_kg_m2 = 1900.0
-	spec.front_cornering_stiffness_n_per_rad = 80000.0
-	spec.rear_cornering_stiffness_n_per_rad = 130000.0
+	spec.front_axle_z = WHEELBASE_M * 0.5
+	spec.rear_axle_z = -WHEELBASE_M * 0.5
+	spec.front_track_m = 1.63
+	spec.rear_track_m = 1.63
+	spec.mass_kg = 1350.0
+	spec.centre_of_gravity_z = spec.rear_axle_z + 0.6 * WHEELBASE_M
+	spec.centre_of_gravity_height_m = 0.55
+	spec.yaw_inertia_kg_m2 = 2480.0
+	spec.friction = FRICTION
 	spec.max_lateral_acceleration_m_s2 = GRIP_M_S2
+	spec.front_cornering_stiffness_n_per_rad = 99000.0
+	spec.rear_cornering_stiffness_n_per_rad = 116500.0
+	spec.cornering_stiffness_load_exponent = 0.7
+	spec.friction_load_sensitivity = 0.25
+	spec.tyre_shape = 1.3
+	spec.tyre_curvature = -1.5
+	spec.front_roll_stiffness_share = 0.75
+	spec.brake_bias_front = 0.7
+	spec.rear_brake_margin = 0.05
 	spec.driven_axle = "front"
 	return spec
 
 
 func _drive(
-	motion: Dictionary, speed_m_s: float, steering_rad: float, seconds: float
+	spec: VehicleSpec, motion: Dictionary, speed_m_s: float, steering_rad: float, seconds: float
 ) -> Dictionary:
 	for step in roundi(seconds / STEP_S):
-		motion = DynamicBicycle.advance(motion, _spec(), speed_m_s, steering_rad, STEP_S)
+		motion = DynamicBicycle.advance(motion, spec, speed_m_s, steering_rad, STEP_S)
 	return motion
 
 
-func _corner() -> Dictionary:
-	## Settled into a fast left-hand corner.
+func _steering_for_radius(spec: VehicleSpec, speed_m_s: float) -> float:
+	## The steering that settles on TURN_RADIUS_M at `speed_m_s`.
+	var steering_rad := WHEELBASE_M / TURN_RADIUS_M
+	for attempt in 8:
+		var settled := _drive(
+			spec, DynamicBicycle.rolling(0.0, speed_m_s), speed_m_s, steering_rad, 4.0
+		)
+		var radius_m: float = speed_m_s / float(settled["yaw_rate_rad_s"])
+		steering_rad += WHEELBASE_M / TURN_RADIUS_M - WHEELBASE_M / radius_m
+	return steering_rad
+
+
+func _understeer_gradient_deg_per_g(spec: VehicleSpec) -> float:
+	var gentle_rad := _steering_for_radius(spec, sqrt(0.1 * GRAVITY_M_S2 * TURN_RADIUS_M))
+	var brisk_rad := _steering_for_radius(spec, sqrt(0.4 * GRAVITY_M_S2 * TURN_RADIUS_M))
+	return rad_to_deg(brisk_rad - gentle_rad) / 0.3
+
+
+func _turn_steering(spec: VehicleSpec) -> float:
+	return _steering_for_radius(spec, TURN_SPEED_M_S)
+
+
+func _turning(spec: VehicleSpec) -> Dictionary:
+	## Settled on ISO 7975's turn, to the left.
 	return _drive(
-		DynamicBicycle.rolling(0.0, CORNER_SPEED_M_S), CORNER_SPEED_M_S, CORNER_STEERING_RAD, 4.0
+		spec, DynamicBicycle.rolling(0.0, TURN_SPEED_M_S), TURN_SPEED_M_S, _turn_steering(spec), 4.0
 	)
 
 
 func _brake(
-	motion: Dictionary, deceleration_m_s2: float, seconds: float, steering_rad: float
+	spec: VehicleSpec,
+	motion: Dictionary,
+	deceleration_m_s2: float,
+	seconds: float,
+	steering_rad: float
 ) -> Dictionary:
+	## `{"motion", "most_sideslip_rad"}` after slowing down at `deceleration_m_s2`.
+	var most_sideslip_rad := 0.0
 	for step in roundi(seconds / STEP_S):
-		var speed_m_s: float = motion["speed_m_s"] - deceleration_m_s2 * STEP_S
-		motion = DynamicBicycle.advance(motion, _spec(), speed_m_s, steering_rad, STEP_S)
-	return motion
+		var speed_m_s := maxf(float(motion["speed_m_s"]) - deceleration_m_s2 * STEP_S, 1.0)
+		motion = DynamicBicycle.advance(motion, spec, speed_m_s, steering_rad, STEP_S)
+		most_sideslip_rad = maxf(most_sideslip_rad, absf(_sideslip_rad(motion)))
+	return {"motion": motion, "most_sideslip_rad": most_sideslip_rad}
+
+
+func _yaw_ratio(motion: Dictionary) -> float:
+	## The yaw rate over the one that keeps TURN_RADIUS_M at the motion's speed.
+	return float(motion["yaw_rate_rad_s"]) / (float(motion["speed_m_s"]) / TURN_RADIUS_M)
 
 
 func _sideslip_rad(motion: Dictionary) -> float:

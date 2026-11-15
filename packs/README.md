@@ -6,8 +6,11 @@ a pack is released as an archive of its built directory. The format is in
 [docs/pack_format.md](../docs/pack_format.md).
 
 The two packs the simulator bundles, `default_track` and `default_car`, are the exception:
-generated from code alone by `tools/default_packs.py` (no external data, CC0), they are
-committed as built in `simulator/default_packs/`, so a clean clone runs, and rebuilt there:
+built by `tools/default_packs.py`, they are committed as built in `simulator/default_packs/`,
+so a clean clone runs, and rebuilt there. The track is generated from code alone (CC0); the
+car's model is "Generic Sedan Car" by Márcio Meireles (MMC Works), CC BY 4.0, credited in the
+pack, built from its source model, which is not committed: download it to
+`build/sedan_src/small.glb` first (`tools/default_car_model.py`), or the car is left as it is:
 
 ```sh
 GODOT=godot python3 tools/default_packs.py

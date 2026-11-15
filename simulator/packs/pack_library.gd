@@ -34,18 +34,43 @@ func ids(kind: String) -> Array[String]:
 	return found
 
 
-func load_vehicle(id: String) -> Dictionary:
-	## `{"vehicle": VehicleSpec}`, or `{"error": reason}`.
+func load_vehicle(id: String, settings: Array = []) -> Dictionary:
+	## `{"vehicle": VehicleSpec}`, or `{"error": reason}`. `settings` are `[path, value]` pairs
+	## (`--set`) overriding fields of the manifest first; those under `track.` are skipped.
 	if not _has(id, "vehicle"):
 		return {"error": "no vehicle pack %s" % id}
-	return VehicleSpec.parse(_packs[id]["manifest"], _packs[id]["directory"])
+	var found := _manifest_with(id, "vehicle", settings)
+	if found.has("error"):
+		return found
+	return VehicleSpec.parse(found["manifest"], _packs[id]["directory"])
 
 
-func load_track(id: String) -> Dictionary:
-	## `{"track": TrackSpec}`, or `{"error": reason}`.
+func load_track(id: String, settings: Array = []) -> Dictionary:
+	## `{"track": TrackSpec}`, or `{"error": reason}`, as `load_vehicle`.
 	if not _has(id, "track"):
 		return {"error": "no track pack %s" % id}
-	return TrackSpec.parse(_packs[id]["manifest"], _packs[id]["directory"])
+	var found := _manifest_with(id, "track", settings)
+	if found.has("error"):
+		return found
+	return TrackSpec.parse(found["manifest"], _packs[id]["directory"])
+
+
+func _manifest_with(id: String, kind: String, settings: Array) -> Dictionary:
+	## `{"manifest"}`: a copy of the pack's manifest with the settings under `kind` applied,
+	## or `{"error"}` naming a setting the manifest has no field for.
+	var manifest: Dictionary = _packs[id]["manifest"].duplicate(true)
+	for setting: Array in settings:
+		var path: String = setting[0]
+		var keys := path.split(".")
+		if keys[0] != kind:
+			continue
+		var within: Variant = manifest
+		for key in keys.slice(0, keys.size() - 1):
+			within = within.get(key) if within is Dictionary else null
+		if not (within is Dictionary and within.has(keys[-1])):
+			return {"error": "%s: --set %s: the pack has no such field" % [id, path]}
+		within[keys[-1]] = setting[1]
+	return {"manifest": manifest}
 
 
 func _has(id: String, kind: String) -> bool:

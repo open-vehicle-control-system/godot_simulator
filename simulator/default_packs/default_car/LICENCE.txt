@@ -1,2 +1,7 @@
-This pack was generated from code by tools/default_packs.py and is dedicated to the
-public domain under CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+The model in vehicle.glb is
+  "Generic Sedan Car" by Márcio Meireles (MMC Works), https://sketchfab.com/3d-models/generic-sedan-car-58c33766470d46e7b2aed542650494e5, CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/).
+Modified: merged into one body mesh by material, one rear wheel kept as the wheel the simulator copies to each corner, the steering wheel separated to turn, mirror glass added to the door mirrors, the origin moved to the ground midway between the axles, textures downsized and re-encoded as JPEG and PNG.
+
+This pack (the model as modified and pack.json) is licensed under CC BY 4.0:
+https://creativecommons.org/licenses/by/4.0/ ; credit the model as above.
+pack.json was written by tools/default_packs.py.

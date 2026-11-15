@@ -49,6 +49,8 @@ const MAX_FIELD_OF_VIEW_DEG := 180.0
 ## The widest the view drawn for a distorted image is, in images.
 const MAX_OVERSCAN := 2.0
 const DRIVEN_AXLES := ["front", "rear", "all"]
+## Dry asphalt holds road tyres at about 1; no tyre holds three times its load.
+const MAX_FRICTION := 3.0
 
 var id: String
 var name: String
@@ -60,14 +62,24 @@ var front_track_m: float
 var rear_track_m: float
 var wheel_radius_m: float
 var wheel_width_m: float
-var max_lateral_acceleration_m_s2: float  ## the tyres' peak grip: the hardest the vehicle corners
 var mass_kg: float
 var centre_of_gravity_z: float
 var centre_of_gravity_height_m: float
 var yaw_inertia_kg_m2: float
-var front_cornering_stiffness_n_per_rad: float  ## the front axle's, both tyres
-var rear_cornering_stiffness_n_per_rad: float
 var driven_axle: String  ## one of DRIVEN_AXLES
+var brake_bias_front: float  ## the front brakes' share of the braking, by design
+## How far below its share of the load the rear's share of the braking is kept; negative lets
+## the rear brake beyond it.
+var rear_brake_margin: float
+var front_roll_stiffness_share: float  ## the front's share of the load cornering moves outwards
+var friction: float  ## the tyres' peak friction coefficient at their static load
+var max_lateral_acceleration_m_s2: float  ## the grip, `friction` times g: the hardest it corners
+var front_cornering_stiffness_n_per_rad: float  ## the front axle's at its static load
+var rear_cornering_stiffness_n_per_rad: float
+var cornering_stiffness_load_exponent: float  ## stiffness grows with the load to this power
+var friction_load_sensitivity: float  ## friction lost per unit of a tyre's load over its static
+var tyre_shape: float  ## Pacejka's C: sliding, a tyre keeps sin(C * PI / 2) of its peak
+var tyre_curvature: float  ## Pacejka's E: below 0 the peak comes at a smaller slip
 var body_size: Vector3
 var body_centre: Vector3
 var driver_eye: Vector3
@@ -93,7 +105,6 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 	spec.rear_track_m = reader.positive("vehicle.rear_track_m")
 	spec.wheel_radius_m = reader.positive("vehicle.wheel_radius_m")
 	spec.wheel_width_m = reader.positive("vehicle.wheel_width_m")
-	spec.max_lateral_acceleration_m_s2 = reader.positive("vehicle.max_lateral_acceleration_m_s2")
 	spec._read_dynamics(reader)
 	spec.body_size = reader.ros_vector("vehicle.body.size_m")
 	spec.body_centre = reader.ros_vector("vehicle.body.centre_m")
@@ -124,21 +135,41 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 
 func _read_dynamics(reader: ManifestReader) -> void:
 	## What the dynamic bicycle model moves the vehicle by.
-	mass_kg = reader.positive("vehicle.mass_kg")
-	centre_of_gravity_z = reader.number("vehicle.centre_of_gravity_x_m")
+	var at := "vehicle.dynamics."
+	mass_kg = reader.positive(at + "mass_kg")
+	centre_of_gravity_z = reader.number(at + "centre_of_gravity_x_m")
 	reader.check(
 		centre_of_gravity_z > rear_axle_z and centre_of_gravity_z < front_axle_z,
-		"vehicle.centre_of_gravity_x_m"
+		at + "centre_of_gravity_x_m"
 	)
-	centre_of_gravity_height_m = reader.positive("vehicle.centre_of_gravity_height_m")
-	yaw_inertia_kg_m2 = reader.positive("vehicle.yaw_inertia_kg_m2")
+	centre_of_gravity_height_m = reader.positive(at + "centre_of_gravity_height_m")
+	yaw_inertia_kg_m2 = reader.positive(at + "yaw_inertia_kg_m2")
+	driven_axle = reader.one_of(at + "driven_axle", DRIVEN_AXLES)
+	brake_bias_front = reader.number(at + "brake_bias_front")
+	reader.check(brake_bias_front >= 0.0 and brake_bias_front <= 1.0, at + "brake_bias_front")
+	rear_brake_margin = reader.number(at + "rear_brake_margin")
+	reader.check(rear_brake_margin >= -1.0 and rear_brake_margin < 1.0, at + "rear_brake_margin")
+	front_roll_stiffness_share = reader.positive(at + "front_roll_stiffness_share", 1.0)
+	friction = reader.positive(at + "friction", MAX_FRICTION)
+	max_lateral_acceleration_m_s2 = friction * DynamicBicycle.GRAVITY_M_S2
 	front_cornering_stiffness_n_per_rad = reader.positive(
-		"vehicle.front_cornering_stiffness_n_per_rad"
+		at + "front_cornering_stiffness_n_per_rad"
 	)
-	rear_cornering_stiffness_n_per_rad = reader.positive(
-		"vehicle.rear_cornering_stiffness_n_per_rad"
+	rear_cornering_stiffness_n_per_rad = reader.positive(at + "rear_cornering_stiffness_n_per_rad")
+	cornering_stiffness_load_exponent = reader.number(at + "cornering_stiffness_load_exponent")
+	reader.check(
+		cornering_stiffness_load_exponent >= 0.0 and cornering_stiffness_load_exponent <= 1.0,
+		at + "cornering_stiffness_load_exponent"
 	)
-	driven_axle = reader.one_of("vehicle.driven_axle", DRIVEN_AXLES)
+	friction_load_sensitivity = reader.number(at + "friction_load_sensitivity")
+	reader.check(
+		friction_load_sensitivity >= 0.0 and friction_load_sensitivity < 1.0,
+		at + "friction_load_sensitivity"
+	)
+	tyre_shape = reader.number(at + "tyre_shape")
+	reader.check(tyre_shape > 1.0 and tyre_shape < 2.0, at + "tyre_shape")
+	tyre_curvature = reader.number(at + "tyre_curvature")
+	reader.check(tyre_curvature >= -10.0 and tyre_curvature < 1.0, at + "tyre_curvature")
 
 
 func _read_camera_effects(reader: ManifestReader) -> void:

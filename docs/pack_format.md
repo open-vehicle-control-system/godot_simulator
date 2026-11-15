@@ -52,14 +52,15 @@ for a vehicle; x, y, z up for a world.
   "rear_track_m": 1.396,
   "wheel_radius_m": 0.296,
   "wheel_width_m": 0.2,
-  "max_lateral_acceleration_m_s2": 7.8,
-  "mass_kg": 1230.0,
-  "centre_of_gravity_x_m": -0.1473,
-  "centre_of_gravity_height_m": 0.53,
-  "yaw_inertia_kg_m2": 1900.0,
-  "front_cornering_stiffness_n_per_rad": 80000.0,
-  "rear_cornering_stiffness_n_per_rad": 130000.0,
-  "driven_axle": "front",
+  "dynamics": {
+    "mass_kg": 1350.0, "centre_of_gravity_x_m": 0.2915, "centre_of_gravity_height_m": 0.55,
+    "yaw_inertia_kg_m2": 2480.0, "driven_axle": "front",
+    "brake_bias_front": 0.7, "rear_brake_margin": 0.05, "front_roll_stiffness_share": 0.75,
+    "friction": 1.0,
+    "front_cornering_stiffness_n_per_rad": 99300.0, "rear_cornering_stiffness_n_per_rad": 117000.0,
+    "cornering_stiffness_load_exponent": 0.7, "friction_load_sensitivity": 0.25,
+    "tyre_shape": 1.3, "tyre_curvature": -1.5
+  },
   "body": {"size_m": [3.85, 1.62, 1.05], "centre_m": [0.0, 0.0, 0.85]},
   "driver_eye_m": [-0.178, 0.381, 1.106],
   "driver_pitch_deg": -2.82,
@@ -86,21 +87,36 @@ for a vehicle; x, y, z up for a world.
 ```
 
 - The origin is on the ground; axle positions are along x.
-- `max_lateral_acceleration_m_s2` is the tyres' peak grip: the vehicle never corners harder
-  than this; steered beyond it, it runs wide or slides. Road tyres on dry asphalt hold about
-  0.8 g.
-- The rest moves the vehicle by the [dynamic bicycle model](./architecture.md#the-vehicles-motion):
-  `mass_kg`; the centre of gravity's position along x (`centre_of_gravity_x_m`, strictly between
-  the axles: the front axle carries the share of the weight the centre of gravity is behind it
-  by) and its `centre_of_gravity_height_m`, which sets how much load braking moves to the front;
-  `yaw_inertia_kg_m2` about the vertical, near mass times the two axle distances for most cars;
-  each axle's cornering stiffness, both its tyres' side force per radian of slip at its static
-  load, typically 14 to 20 times that load per radian for road tyres, the rear stiffer for a
-  mildly understeering car; and `driven_axle`, `front`, `rear` or `all`, which carries
-  traction.
+- `dynamics` is what the [dynamic bicycle model](./architecture.md#the-vehicles-motion) moves
+  the vehicle by: every physical property of it is here, none in the simulator. The values
+  typical of a mid-size front-wheel drive sedan, and where they come from, are in
+  `tools/vehicle_dynamics.py`.
+
+  | Field | Meaning | Unit, range | Typical |
+  |---|---|---|---|
+  | `mass_kg` | the vehicle's mass, laden as driven | kg, above 0 | 1100 to 1600 |
+  | `centre_of_gravity_x_m` | the centre of gravity along x: the front axle carries the share of the weight it is behind it by | m, strictly between the axles | 60 % of the wheelbase ahead of the rear axle for a front-engined car |
+  | `centre_of_gravity_height_m` | its height above the ground: how much load braking moves forwards and cornering outwards | m, above 0 | 0.5 to 0.6 |
+  | `yaw_inertia_kg_m2` | the moment of inertia about the vertical | kg m², above 0 | 0.9 × mass × the two axle distances |
+  | `driven_axle` | which wheels carry traction | `front`, `rear` or `all` | |
+  | `brake_bias_front` | the front brakes' share of the braking, by design | 0 to 1 | 0.65 to 0.75 |
+  | `rear_brake_margin` | how far below the rear axle's share of the load the rear's share of the braking is kept, as a proportioning valve or EBD does; negative lets the rear brake beyond its load, -1 never holds it back | -1 to below 1 | 0.05 |
+  | `front_roll_stiffness_share` | the front axle's share of the load cornering moves from the inner wheels to the outer ones (its share of the roll stiffness) | above 0, below 1 | 0.6 to 0.75 |
+  | `friction` | the tyres' peak friction coefficient at their static load: the grip, `friction` × g, is the hardest the vehicle ever corners | above 0, below 3 | 1.0 on dry asphalt, 0.9 for eco tyres |
+  | `front_cornering_stiffness_n_per_rad`, `rear_cornering_stiffness_n_per_rad` | an axle's side force per radian of slip, both tyres, at its static load, effective (with the suspension's compliance) | N/rad, above 0 | 12.5 (front) and 22 (rear) × the axle's static load in N |
+  | `cornering_stiffness_load_exponent` | a tyre's cornering stiffness grows with its load to this power | 0 to 1 | 0.7 |
+  | `friction_load_sensitivity` | the share of its friction a tyre loses per unit of load over its static load, so moving load across an axle loses grip | 0 to below 1 | 0.1 to 0.3 |
+  | `tyre_shape` | Pacejka's C: sliding, a tyre keeps sin(C × 90°) of its peak force | above 1, below 2 | 1.3 (90 %) |
+  | `tyre_curvature` | Pacejka's E: how early the force peaks; below 0 the peak comes at a smaller slip | -10 to below 1 | -1.5 |
+
+  An axle's side force is Pacejka's magic formula `D sin(C atan(B α - E (B α - atan(B α))))`,
+  with D its grip and B its stiffness over C D. With the typical values the force peaks near
+  6° of slip at the rear and 10° at the front, the sedan understeers by about 2° per g
+  (ISO 4138) and braking at 0.6 g in a 0.57 g turn tightens its line a little without a slide
+  (ISO 7975).
 - `body` is a box: the placeholder drawn when there is no `model`.
-- Lengths, the wheel radius, the mass, inertia and stiffnesses, the stereo resolution, baseline
-  and rate are positive, the field of view under 180°, and the front axle ahead of the rear one;
+- Lengths, the wheel radius, the stereo resolution, baseline and rate are positive, the
+  dynamics within the ranges above, the field of view under 180°, and the front axle ahead of the rear one;
   a pack that breaks this is refused.
 - `driver_pitch_deg` tilts the cockpit view up; negative looks down.
 - `stereo.mount_m` is midway between the two cameras; positive `pitch_deg` tilts them down. See

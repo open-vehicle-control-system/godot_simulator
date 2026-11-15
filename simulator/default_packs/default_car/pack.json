@@ -2,51 +2,60 @@
   "format": 1,
   "kind": "vehicle",
   "id": "default_car",
-  "name": "Default compact car",
-  "version": "0.1.0",
-  "licence": "CC0-1.0",
+  "name": "Generic sedan",
+  "version": "1.0.0",
+  "licence": "CC-BY-4.0",
   "attribution": [
-    "Model: a provisional placeholder built by tools/default_vehicle.py, CC0"
+    "Model: \"Generic Sedan Car\" by M\u00e1rcio Meireles (MMC Works), https://sketchfab.com/3d-models/generic-sedan-car-58c33766470d46e7b2aed542650494e5, CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/). Modified: merged into one body mesh by material, one rear wheel kept as the wheel the simulator copies to each corner, the steering wheel separated to turn, mirror glass added to the door mirrors, the origin moved to the ground midway between the axles, textures downsized and re-encoded as JPEG and PNG"
   ],
   "vehicle": {
     "model": "vehicle.glb",
-    "front_axle_x_m": 1.22,
-    "rear_axle_x_m": -1.22,
-    "front_track_m": 1.4,
-    "rear_track_m": 1.4,
-    "wheel_radius_m": 0.3,
-    "wheel_width_m": 0.2,
-    "max_lateral_acceleration_m_s2": 8.0,
-    "mass_kg": 1200.0,
-    "centre_of_gravity_x_m": 0.244,
-    "centre_of_gravity_height_m": 0.55,
-    "yaw_inertia_kg_m2": 1750.0,
-    "front_cornering_stiffness_n_per_rad": 100000.0,
-    "rear_cornering_stiffness_n_per_rad": 95000.0,
-    "driven_axle": "front",
+    "front_axle_x_m": 1.458,
+    "rear_axle_x_m": -1.458,
+    "front_track_m": 1.631,
+    "rear_track_m": 1.631,
+    "wheel_radius_m": 0.344,
+    "wheel_width_m": 0.257,
+    "dynamics": {
+      "mass_kg": 1350.0,
+      "centre_of_gravity_x_m": 0.2916,
+      "centre_of_gravity_height_m": 0.55,
+      "yaw_inertia_kg_m2": 2480.0,
+      "driven_axle": "front",
+      "friction": 1.0,
+      "front_cornering_stiffness_n_per_rad": 99300.0,
+      "rear_cornering_stiffness_n_per_rad": 117000.0,
+      "brake_bias_front": 0.7,
+      "rear_brake_margin": 0.05,
+      "front_roll_stiffness_share": 0.75,
+      "cornering_stiffness_load_exponent": 0.7,
+      "friction_load_sensitivity": 0.25,
+      "tyre_shape": 1.3,
+      "tyre_curvature": -1.5
+    },
     "body": {
       "size_m": [
-        3.9,
-        1.56,
-        0.99
+        4.978,
+        2.105,
+        1.323
       ],
       "centre_m": [
+        -0.12,
         0.0,
-        0.0,
-        0.94
+        0.838
       ]
     },
     "driver_eye_m": [
-      -0.35,
-      0.36,
-      1.2
+      -0.166,
+      0.411,
+      1.187
     ],
-    "driver_pitch_deg": -3.0,
+    "driver_pitch_deg": -4.0,
     "stereo": {
       "mount_m": [
-        0.5,
+        0.434,
         0.0,
-        1.32
+        1.362
       ],
       "width_px": 1280,
       "height_px": 720,
@@ -54,6 +63,23 @@
       "baseline_m": 0.12,
       "pitch_deg": 0.0,
       "rate_hz": 15.0
+    },
+    "instruments": {
+      "steering_wheel": {
+        "node": "Cockpit_Steer",
+        "axis": [
+          -0.9508,
+          -0.0083,
+          0.3098
+        ],
+        "ratio": 15.0,
+        "lock_deg": 520.0
+      }
+    },
+    "mirrors": {
+      "material": "Mirror",
+      "interior_hfov_deg": 45.0,
+      "door_hfov_deg": 30.0
     }
   }
 }

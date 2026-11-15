@@ -90,20 +90,17 @@ class DynamicsTest(unittest.TestCase):
 
         # 48 % of the weight on the front axle: 48 % of the wheelbase ahead of the rear one.
         self.assertAlmostEqual(fields["centre_of_gravity_x_m"], -1.319 + 0.48 * 2.441, places=3)
-        self.assertNotIn("front_weight_share", fields)
 
-    def test_every_vehicle_has_the_fields_a_pack_requires(self):
-        required = {
-            "centre_of_gravity_x_m",
-            "centre_of_gravity_height_m",
-            "mass_kg",
-            "yaw_inertia_kg_m2",
-            "front_cornering_stiffness_n_per_rad",
-            "rear_cornering_stiffness_n_per_rad",
-            "driven_axle",
-        }
-        for vehicle_id in pack_experiment.DYNAMICS:
-            self.assertEqual(set(pack_experiment.dynamics(vehicle_id, 1.0, -1.0)), required)
+    def test_every_vehicle_is_a_road_car_as_weighed(self):
+        for vehicle_id, weighed in pack_experiment.WEIGHED.items():
+            fields = pack_experiment.dynamics(vehicle_id, 1.0, -1.0)
+
+            self.assertEqual(
+                fields,
+                pack_experiment.vehicle_dynamics.road_car(
+                    **weighed, front_axle_x_m=1.0, rear_axle_x_m=-1.0
+                ),
+            )
 
 
 class MaterialNamesTest(unittest.TestCase):

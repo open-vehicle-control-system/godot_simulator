@@ -47,6 +47,7 @@ import sign_faces
 import smooth_terrain
 import track_surfaces
 import track_tiles
+import vehicle_dynamics
 from PIL import Image
 
 # CC BY 4.0 as the SPW publishes it asks for the source and an explicit mention of what was
@@ -678,45 +679,34 @@ def gltf_material_names(model):
     return [material.get("name", "") for material in document.get("materials", [])]
 
 
-# Road tyres on dry asphalt hold about 0.8 g sideways; OVCS1 runs eco tyres.
-LATERAL_GRIP_M_S2 = {"ovcs1": 7.8, "ovcs_mini": 8.0}
-
-# What the dynamic bicycle model moves each vehicle by. OVCS1 is a 2007 VW Polo 9N3 with a
-# Nissan Leaf motor driving the front wheels: about 1230 kg with 48 % on the front axle (the
-# conversion's own weighing). The centre of gravity's height, the yaw inertia (close to mass
-# times the two axle distances, as for most cars) and the cornering stiffness (axle loads times
-# 14 to 19 per radian, the rear stiffer, giving a mild understeer of about 1 degree per g) are
-# textbook values for a small hatchback (Gillespie, Fundamentals of Vehicle Dynamics; Pacejka,
-# Tyre and Vehicle Dynamics). The OVCS Mini is a 1:10 four-wheel drive chassis of 2.41 kg,
-# scaled the same way.
-DYNAMICS = {
+# What weighing and measuring each vehicle gives; vehicle_dynamics adds what is typical of road
+# cars. OVCS1 is a 2007 VW Polo 9N3 with a Nissan Leaf motor driving the front wheels, about
+# 1230 kg; its 48 % on the front axle is as the TASK-36 profile states it, unverified (a stock
+# Polo 9N3 carries about 62 %; the conversion's battery moves weight rearwards). It runs eco
+# tyres. The OVCS Mini is a 1:10 four-wheel drive chassis of 2.41 kg, scaled the same way.
+WEIGHED = {
     "ovcs1": {
         "mass_kg": 1230.0,
         "front_weight_share": 0.48,
         "centre_of_gravity_height_m": 0.53,
-        "yaw_inertia_kg_m2": 1900.0,
-        "front_cornering_stiffness_n_per_rad": 80000.0,
-        "rear_cornering_stiffness_n_per_rad": 130000.0,
         "driven_axle": "front",
+        "friction": 0.9,
     },
     "ovcs_mini": {
         "mass_kg": 2.41,
         "front_weight_share": 0.5,
         "centre_of_gravity_height_m": 0.045,
-        "yaw_inertia_kg_m2": 0.065,
-        "front_cornering_stiffness_n_per_rad": 180.0,
-        "rear_cornering_stiffness_n_per_rad": 260.0,
         "driven_axle": "all",
+        "friction": 0.9,
     },
 }
 
 
 def dynamics(vehicle_id, front_axle_x_m, rear_axle_x_m):
-    """Return a vehicle's dynamics fields, its centre of gravity placed by its weight split."""
-    known = dict(DYNAMICS[vehicle_id])
-    front_share = known.pop("front_weight_share")
-    centre_x_m = rear_axle_x_m + front_share * (front_axle_x_m - rear_axle_x_m)
-    return {"centre_of_gravity_x_m": round(centre_x_m, 4), **known}
+    """Return a vehicle's `vehicle.dynamics`."""
+    return vehicle_dynamics.road_car(
+        **WEIGHED[vehicle_id], front_axle_x_m=front_axle_x_m, rear_axle_x_m=rear_axle_x_m
+    )
 
 
 def vehicle_pack(experiment, vehicle_id, licence, attribution):
@@ -747,8 +737,7 @@ def vehicle_pack(experiment, vehicle_id, licence, attribution):
         "rear_track_m": profile["track_rear"],
         "wheel_radius_m": profile["wheel_radius"],
         "wheel_width_m": profile["wheel_width"],
-        "max_lateral_acceleration_m_s2": LATERAL_GRIP_M_S2[vehicle_id],
-        **dynamics(vehicle_id, front, rear),
+        "dynamics": dynamics(vehicle_id, front, rear),
         "body": {"size_m": ros(body), "centre_m": ros(body_centre)},
         "driver_eye_m": ros(profile["driver_eye"]),
         "driver_pitch_deg": profile.get("driver_pitch_deg", 0.0),

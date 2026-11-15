@@ -52,14 +52,13 @@ func test_full_lock_at_180_km_h_never_corners_harder_than_the_grip() -> void:
 func test_refuses_a_pack_without_a_positive_grip() -> void:
 	var directory := PackFixtures.fresh_directory("grip_missing")
 	var manifest := PackFixtures.vehicle_manifest("small_car")
-	manifest["vehicle"]["max_lateral_acceleration_m_s2"] = 0.0
+	manifest["vehicle"]["dynamics"]["friction"] = 0.0
 	PackFixtures.write_pack(directory, manifest)
 
 	var found := PackLibrary.scan([directory]).load_vehicle("small_car")
 
 	assert_true(
-		found.get("error", "").begins_with("small_car: vehicle.max_lateral_acceleration_m_s2"),
-		str(found)
+		found.get("error", "").begins_with("small_car: vehicle.dynamics.friction"), str(found)
 	)
 
 

@@ -8,8 +8,9 @@ Godot visualises: driving comes from OVCS (joystick messages, Nav2, a simulated 
 exception is `--keyboard`, which drives with the arrow keys so a track can be looked around
 without OVCS.
 Tracks and vehicles are **packs**, loaded at runtime and released apart from the simulator,
-each under its own licence. The simulator bundles only two, generated from code and CC0: a
-small test circuit (`default_track`) and a generic compact car (`default_car`).
+each under its own licence. The simulator bundles only two: a small test circuit
+(`default_track`, generated from code, CC0) and a mid-size sedan (`default_car`, whose model is
+"Generic Sedan Car" by Márcio Meireles, CC BY 4.0: see [Licences and credits](#licences-and-credits)).
 
 ## Run
 
@@ -27,9 +28,12 @@ Other packs are selected by id from a directory of packs:
 ```
 
 The default packs live in `simulator/default_packs/`, committed as built; the simulator always
-searches it, last. They are built from code alone, from fixed seeds, by
-`python3 tools/default_packs.py` (Godot compresses their textures); rebuild them after
-changing their builder, and the tools' tests check the committed files are the builder's.
+searches it, last. They are built by `python3 tools/default_packs.py` (Godot compresses their
+textures): the track from code alone, from fixed seeds; the car from its source model, which is
+not in the repository (download it to `build/sedan_src/small.glb`, as
+`tools/default_car_model.py` says; without it the car is left as committed). Rebuild them after
+changing their builder; the tools' tests check the committed files are the builder's (the car's
+only when its source is there).
 
 | Option | Meaning |
 |---|---|
@@ -48,6 +52,7 @@ changing their builder, and the tools' tests check the committed files are the b
 | `--eye=X,Y,Z` | look at the vehicle from this fixed point of the track's frame |
 | `--screenshot=FILE` | save the window as a PNG once the world has rendered, print what the window and the other viewports (stereo cameras, mirrors) cost to render, quit |
 | `--upscale=LEVEL` | draw the window at a share of its size and upscale it with FSR 2: `quality` (67%), `balanced` (59%) or `performance` (50%); the stereo cameras are never upscaled |
+| `--set=PATH=VALUE` | override a field of the vehicle's or the track's `pack.json` for this run, checked as the pack is: `PATH` starts with `vehicle.` or `track.` and names a field the pack has, `VALUE` is JSON (`--set=vehicle.dynamics.brake_bias_front=0.6`); repeatable, to tune a pack without editing it |
 | `--timing` | print when the first frame was drawn and, every five seconds, the worst frame time, how many frames ran over 33 ms, a physics step's time, the GPU's time over all viewports and what was drawn |
 
 Keys: C cycles the views, V shows the stereo pair, F11 toggles full screen, Esc quits. Under
@@ -82,8 +87,15 @@ for the code rules. Licence: MIT ([LICENCE.txt](./LICENCE.txt)); packs carry the
 The simulator's code is MIT ([LICENCE.txt](./LICENCE.txt)). Every pack states its own licence
 and credits in its `pack.json` `attribution`, with a `LICENCE.txt` beside it.
 
-- **Bundled default packs** (`simulator/default_packs/`): `default_track` and `default_car`,
-  generated from code by `tools/default_packs.py` and dedicated to the public domain (CC0 1.0).
+- **Bundled default packs** (`simulator/default_packs/`), built by `tools/default_packs.py`:
+  - `default_track`: generated from code, dedicated to the public domain (CC0 1.0).
+  - `default_car`: CC BY 4.0, because of its model: "Generic Sedan Car" by Márcio Meireles
+    (MMC Works),
+    https://sketchfab.com/3d-models/generic-sedan-car-58c33766470d46e7b2aed542650494e5,
+    CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/). Modified by
+    `tools/default_car_model.py`: merged into one body mesh by material, one rear wheel kept as
+    the wheel copied to each corner, the steering wheel separated to turn, mirror glass added,
+    the origin moved, textures downsized and re-encoded. See its `ATTRIBUTION.md`.
 - **Packs the builders make** from public data carry these sources' terms:
   - Service public de Wallonie (SPW): Relief de la Wallonie (MNT, MNS 2021-2022) and
     orthophotos, https://geoportail.wallonie.be, CC BY 4.0; a pack states what was modified.

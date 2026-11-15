@@ -83,8 +83,12 @@ func test_reports_the_motion_of_its_origin_in_a_steady_slow_turn() -> void:
 	assert_almost_eq(state["linear_acceleration_m_s2"], expected_acceleration, 0.1)
 
 
-func test_braking_hard_in_a_fast_corner_slides_it_sideways() -> void:
-	var vehicle := await _vehicle_on_wide_ground()
+func test_braking_the_rear_hard_in_a_fast_corner_slides_it_sideways() -> void:
+	# Brakes biased to the rear, without a proportioning valve to hold them back.
+	var manifest := PackFixtures.vehicle_manifest("small_car")
+	manifest["vehicle"]["dynamics"]["brake_bias_front"] = 0.4
+	manifest["vehicle"]["dynamics"]["rear_brake_margin"] = -1.0
+	var vehicle := await _vehicle_on_wide_ground(manifest)
 	vehicle.command(22.0, 0.04)
 	await wait_physics_frames(Engine.physics_ticks_per_second * 4)
 	var speed_m_s := 22.0
@@ -106,9 +110,9 @@ func test_braking_hard_in_a_fast_corner_slides_it_sideways() -> void:
 	assert_almost_eq(float(state["angular_velocity_rad_s"].y), vehicle.yaw_rate_rad_s, 1e-6)
 
 
-func _vehicle_on_wide_ground() -> Vehicle:
+func _vehicle_on_wide_ground(manifest := PackFixtures.vehicle_manifest("small_car")) -> Vehicle:
 	var directory := PackFixtures.fresh_directory("motion_wide")
-	PackFixtures.write_pack(directory, PackFixtures.vehicle_manifest("small_car"))
+	PackFixtures.write_pack(directory, manifest)
 	var spec: VehicleSpec = PackLibrary.scan([directory]).load_vehicle("small_car")["vehicle"]
 	var ground := StaticBody3D.new()
 	var shape := CollisionShape3D.new()

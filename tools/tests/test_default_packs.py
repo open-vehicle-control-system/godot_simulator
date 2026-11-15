@@ -1,5 +1,9 @@
 # ruff: noqa: D102
-"""Tests of the default track and vehicle packs, generated from code alone."""
+"""Tests of the default track and vehicle packs.
+
+The vehicle's are checked only when its source model is in build/sedan_src (see
+default_car_model.py); without it they are skipped with a message saying so.
+"""
 
 import hashlib
 import json
@@ -16,6 +20,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import buildings
+import default_car_model
 import default_packs
 import default_track
 import default_vehicle
@@ -23,6 +28,11 @@ import smooth_terrain
 import track_surfaces
 
 SCRATCH = default_packs.REPOSITORY / "build" / "test_default_packs"
+NO_CAR_SOURCE = (
+    f"{default_car_model.SOURCE} is missing: download the source model there to check "
+    f"{default_vehicle.VEHICLE_ID} ({default_car_model.SOURCE_URL})"
+)
+CAR_SOURCE_PRESENT = default_car_model.SOURCE.exists()
 
 
 def file_hashes(directory):
@@ -55,21 +65,46 @@ class BuiltPacks(unittest.TestCase):
     def test_two_builds_are_identical(self):
         self.assertEqual(file_hashes(self.out), file_hashes(self.again))
 
-    def test_the_committed_packs_are_the_builders(self):
-        committed = file_hashes(default_packs.OUT)
-        built = file_hashes(self.out)
+    def test_the_committed_track_is_the_builders(self):
+        self.assert_committed_as_built(default_track.TRACK_ID)
+
+    @unittest.skipUnless(CAR_SOURCE_PRESENT, NO_CAR_SOURCE)
+    def test_the_committed_vehicle_is_the_builders(self):
+        self.assert_committed_as_built(default_vehicle.VEHICLE_ID)
+
+    def assert_committed_as_built(self, pack_id):
+        committed = file_hashes(default_packs.OUT / pack_id)
+        built = file_hashes(self.out / pack_id)
         for path, digest in built.items():
             self.assertEqual(committed.get(path), digest, path)
-        compressed = {str(job[2].relative_to(self.out)) for job in self.jobs}
-        self.assertEqual(set(committed) - set(built) - {".gdignore"}, compressed)
+        compressed = {
+            str(job[2].relative_to(self.out / pack_id))
+            for job in self.jobs
+            if job[2].is_relative_to(self.out / pack_id)
+        }
+        self.assertEqual(set(committed) - set(built), compressed)
 
-    def test_both_packs_are_cc0_with_a_licence(self):
-        for pack_id in (default_track.TRACK_ID, default_vehicle.VEHICLE_ID):
-            manifest = json.loads((self.out / pack_id / "pack.json").read_text())
-            self.assertEqual(manifest["format"], 1)
-            self.assertEqual(manifest["id"], pack_id)
-            self.assertEqual(manifest["licence"], "CC0-1.0")
-            self.assertTrue((self.out / pack_id / "LICENCE.txt").exists())
+    def test_the_track_is_cc0_with_a_licence(self):
+        manifest = json.loads((self.track / "pack.json").read_text())
+        self.assertEqual(manifest["format"], 1)
+        self.assertEqual(manifest["id"], default_track.TRACK_ID)
+        self.assertEqual(manifest["licence"], "CC0-1.0")
+        self.assertIn("CC0", (self.track / "LICENCE.txt").read_text())
+
+    @unittest.skipUnless(CAR_SOURCE_PRESENT, NO_CAR_SOURCE)
+    def test_the_vehicle_credits_its_model_as_cc_by_asks(self):
+        vehicle = self.out / default_vehicle.VEHICLE_ID
+        manifest = json.loads((vehicle / "pack.json").read_text())
+        self.assertEqual(manifest["licence"], "CC-BY-4.0")
+        for text in (
+            manifest["attribution"][0],
+            (vehicle / "LICENCE.txt").read_text(),
+            (vehicle / "ATTRIBUTION.md").read_text(),
+        ):
+            for credit in ("Generic Sedan Car", "Márcio Meireles", "MMC Works", "Modified"):
+                self.assertIn(credit, text)
+            self.assertIn(default_car_model.SOURCE_URL, text)
+            self.assertIn("CC BY 4.0", text)
 
     def test_every_file_the_track_names_is_there(self):
         track = self.manifest["track"]
@@ -159,10 +194,41 @@ class BuiltPacks(unittest.TestCase):
                 np.hypot(*(points - (y, -x)).T).min(), default_track.HALF_WIDTH_M + 8
             )
 
-    def test_the_vehicle_model_has_a_body_and_a_wheel(self):
+    @unittest.skipUnless(CAR_SOURCE_PRESENT, NO_CAR_SOURCE)
+    def test_the_vehicle_model_has_a_body_a_wheel_and_a_steering_wheel(self):
         model = self.out / default_vehicle.VEHICLE_ID / default_vehicle.MODEL
         gltf, _ = smooth_terrain.read_glb(model)
-        self.assertEqual({node["name"] for node in gltf["nodes"]}, {"Body", "Wheel"})
+        self.assertEqual(
+            {node["name"] for node in gltf["nodes"]}, {"Body", "Wheel", "Cockpit_Steer"}
+        )
+        self.assertIn("Mirror", {material["name"] for material in gltf["materials"]})
+
+    @unittest.skipUnless(CAR_SOURCE_PRESENT, NO_CAR_SOURCE)
+    def test_the_wheel_is_centred_on_its_axle_as_the_manifest_measures(self):
+        vehicle = self.out / default_vehicle.VEHICLE_ID
+        manifest = json.loads((vehicle / "pack.json").read_text())["vehicle"]
+        gltf, _ = smooth_terrain.read_glb(vehicle / default_vehicle.MODEL)
+        wheel = next(mesh for mesh in gltf["meshes"] if mesh["name"] == "Wheel")
+        accessors = [
+            gltf["accessors"][part["attributes"]["POSITION"]] for part in wheel["primitives"]
+        ]
+        low = np.min([accessor["min"] for accessor in accessors], 0)
+        high = np.max([accessor["max"] for accessor in accessors], 0)
+        self.assertAlmostEqual((high[1] + low[1]) / 2.0, 0.0, delta=0.005)
+        self.assertAlmostEqual((high[2] + low[2]) / 2.0, 0.0, delta=0.005)
+        self.assertAlmostEqual(high[1], manifest["wheel_radius_m"], delta=0.005)
+        rim = next(
+            gltf["accessors"][part["attributes"]["POSITION"]]
+            for part in wheel["primitives"]
+            if gltf["materials"][part["material"]]["name"].startswith("MetalStainless")
+        )
+        self.assertGreater(rim["min"][0] + rim["max"][0], 0.0, "the rim faces out, towards +X")
+
+    @unittest.skipUnless(CAR_SOURCE_PRESENT, NO_CAR_SOURCE)
+    def test_the_vehicle_pack_is_small(self):
+        vehicle = self.out / default_vehicle.VEHICLE_ID
+        size = sum(path.stat().st_size for path in vehicle.rglob("*") if path.is_file())
+        self.assertLess(size, 10_000_000)
 
 
 class Lap(unittest.TestCase):

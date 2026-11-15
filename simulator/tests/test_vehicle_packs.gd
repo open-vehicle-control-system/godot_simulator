@@ -208,19 +208,67 @@ func _vehicle_with_stereo(camera_fields: Dictionary) -> Dictionary:
 
 func test_refuses_dynamics_out_of_range() -> void:
 	var cases := {
-		"mass_kg": [0.0, "small_car: vehicle.mass_kg is out of range"],
-		"centre_of_gravity_x_m": [1.5, "small_car: vehicle.centre_of_gravity_x_m is out of range"],
-		"yaw_inertia_kg_m2": [-1.0, "small_car: vehicle.yaw_inertia_kg_m2 is out of range"],
-		"rear_cornering_stiffness_n_per_rad":
-		[0.0, "small_car: vehicle.rear_cornering_stiffness_n_per_rad is out of range"],
-		"driven_axle": ["middle", "small_car: vehicle.driven_axle is not one of front, rear, all"],
+		"mass_kg": 0.0,
+		"centre_of_gravity_x_m": 1.5,
+		"yaw_inertia_kg_m2": -1.0,
+		"brake_bias_front": 1.2,
+		"rear_brake_margin": 1.0,
+		"front_roll_stiffness_share": 1.0,
+		"friction": 0.0,
+		"rear_cornering_stiffness_n_per_rad": 0.0,
+		"cornering_stiffness_load_exponent": 1.5,
+		"friction_load_sensitivity": -0.1,
+		"tyre_shape": 1.0,
+		"tyre_curvature": 1.0,
 	}
 	for field in cases:
-		var directory := PackFixtures.fresh_directory("dynamics_" + field)
-		var manifest := PackFixtures.vehicle_manifest("small_car")
-		manifest["vehicle"][field] = cases[field][0]
-		PackFixtures.write_pack(directory, manifest)
+		var found := _vehicle_with_dynamics(field, cases[field])
 
-		var found := PackLibrary.scan([directory]).load_vehicle("small_car")
+		assert_eq(found, {"error": "small_car: vehicle.dynamics.%s is out of range" % field}, field)
+	assert_eq(
+		_vehicle_with_dynamics("driven_axle", "middle"),
+		{"error": "small_car: vehicle.dynamics.driven_axle is not one of front, rear, all"}
+	)
 
-		assert_eq(found, {"error": cases[field][1]}, field)
+
+func _vehicle_with_dynamics(field: String, value: Variant) -> Dictionary:
+	var directory := PackFixtures.fresh_directory("dynamics_" + field)
+	var manifest := PackFixtures.vehicle_manifest("small_car")
+	manifest["vehicle"]["dynamics"][field] = value
+	PackFixtures.write_pack(directory, manifest)
+	return PackLibrary.scan([directory]).load_vehicle("small_car")
+
+
+func test_settings_override_the_pack_before_it_is_checked() -> void:
+	var directory := PackFixtures.fresh_directory("settings")
+	PackFixtures.write_pack(directory, PackFixtures.vehicle_manifest("small_car"))
+	var library := PackLibrary.scan([directory])
+	var settings := [
+		["vehicle.dynamics.brake_bias_front", 0.55],
+		["track.sun.azimuth_deg", 10.0],
+		["vehicle.dynamics.rear_cornering_stiffness_n_per_rad", 90000.0],
+	]
+
+	var found := library.load_vehicle("small_car", settings)
+
+	var spec: VehicleSpec = found["vehicle"]
+	assert_almost_eq(spec.brake_bias_front, 0.55, 1e-9)
+	assert_almost_eq(spec.rear_cornering_stiffness_n_per_rad, 90000.0, 1e-9)
+	var again: VehicleSpec = library.load_vehicle("small_car")["vehicle"]
+	assert_almost_eq(again.brake_bias_front, 0.7, 1e-9, "the pack itself is unchanged")
+
+
+func test_settings_are_checked_as_the_pack_is() -> void:
+	var directory := PackFixtures.fresh_directory("settings_checked")
+	PackFixtures.write_pack(directory, PackFixtures.vehicle_manifest("small_car"))
+	var library := PackLibrary.scan([directory])
+	var cases := {
+		"small_car: vehicle.dynamics.brake_bias_front is out of range":
+		["vehicle.dynamics.brake_bias_front", 1.5],
+		"small_car: --set vehicle.dynamics.brake_bias: the pack has no such field":
+		["vehicle.dynamics.brake_bias", 0.6],
+		"small_car: --set vehicle.dynamics.friction.peak: the pack has no such field":
+		["vehicle.dynamics.friction.peak", 0.6],
+	}
+	for problem in cases:
+		assert_eq(library.load_vehicle("small_car", [cases[problem]]), {"error": problem})

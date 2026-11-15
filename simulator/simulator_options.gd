@@ -29,6 +29,10 @@ extends RefCounted
 ##   --screenshot=FILE       save the window as a PNG once the world has rendered, then quit
 ##   --upscale=LEVEL         draw the window smaller and upscale it with FSR 2: quality,
 ##                           balanced or performance; the stereo cameras are not upscaled
+##   --set=PATH=VALUE        override a field of the vehicle's or the track's pack.json for this
+##                           run, before the pack is checked: PATH from `vehicle.` or `track.`
+##                           (`--set=vehicle.dynamics.brake_bias_front=0.65`), VALUE as JSON;
+##                           repeatable, applied in order
 ##   --timing                report when the first frame was drawn and, every few seconds,
 ##                           the worst frame time, the GPU time and what was drawn
 
@@ -62,6 +66,7 @@ var eye_position_m := Vector3.ZERO  ## the track's ROS frame: x, y, z up
 var screenshot_path := ""
 var upscale := ""  ## a level of Upscaling.SCALES, or "" for none
 var timing := false
+var pack_settings: Array = []  ## [path, value] pairs, in the order given
 
 
 static func parse(arguments: PackedStringArray) -> Dictionary:
@@ -72,6 +77,8 @@ static func parse(arguments: PackedStringArray) -> Dictionary:
 		var problem := ""
 		if separator < 0:
 			problem = options._read_switch(argument)
+		elif argument.left(separator) == "--set":
+			problem = options._read_pack_setting(argument.substr(separator + 1))
 		else:
 			problem = options._read(argument.left(separator), argument.substr(separator + 1))
 		if problem != "":
@@ -146,6 +153,21 @@ func _read(option: String, argument: String) -> String:
 			screenshot_path = argument
 		_:
 			return "unknown option %s" % option
+	return ""
+
+
+func _read_pack_setting(setting: String) -> String:
+	var separator := setting.find("=")
+	var path := setting.left(separator) if separator > 0 else ""
+	var under := path.get_slice(".", 0)
+	if not under in ["vehicle", "track"] or path.get_slice_count(".") < 2 or path.ends_with("."):
+		return (
+			"--set is PATH=VALUE, PATH a field of the vehicle's or the track's pack.json"
+			+ " (vehicle.… or track.…)"
+		)
+	var text := setting.substr(separator + 1)
+	var json := JSON.new()
+	pack_settings.append([path, json.data if json.parse(text) == OK else text])
 	return ""
 
 
