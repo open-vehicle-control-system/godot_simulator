@@ -8,6 +8,8 @@ extends RefCounted
 ##   --link=HOST[:PORT]      the OVCS simulator link to connect to (port 7400 by default);
 ##                           without it the vehicle stands still
 ##   --keyboard              drive with the arrow keys instead, without OVCS
+##   --follow-route=KM_H     drive the track's centre line at this speed, slower in corners,
+##                           instead, without OVCS
 ##   --hold=KM_H,STEERING_DEG
 ##                           hold this speed and front wheel angle (positive left) instead,
 ##                           without OVCS: what a screenshot of a moving vehicle needs
@@ -60,6 +62,8 @@ var keyboard := false
 var hold_given := false
 var hold_speed_m_s := 0.0
 var hold_steering_rad := 0.0
+var follow_route_given := false
+var follow_route_speed_m_s := 0.0
 var spawn_given := false
 var spawn_position_m := Vector3.ZERO  ## the track's ROS frame: x, y, z up
 var spawn_yaw_deg := 0.0
@@ -89,6 +93,19 @@ static func parse(arguments: PackedStringArray) -> Dictionary:
 		return {"error": "--keyboard and --link both drive the vehicle: choose one"}
 	if options.hold_given and (options.keyboard or options.link_host != ""):
 		return {"error": "--hold drives the vehicle: not with --keyboard or --link"}
+	if (
+		options.follow_route_given
+		and (
+			options.keyboard
+			or options.link_host != ""
+			or options.hold_given
+			or options.drive_log_path != ""
+		)
+	):
+		return {
+			"error":
+			"--follow-route drives the vehicle: not with --keyboard, --link, --hold or --drive-log"
+		}
 	if options.ground_truth and options.recording_directory() == "":
 		return {"error": "--ground-truth is recorded: it needs --stereo-record or --record"}
 	var problem := options._what_is_wrong_with_recording()
@@ -149,7 +166,7 @@ func _read(option: String, argument: String) -> String:
 			drive_log_path = argument
 		"--show-stereo":
 			return "--show-stereo takes no value"
-		"--spawn", "--eye", "--hold", "--record-seconds":
+		"--spawn", "--eye", "--hold", "--record-seconds", "--follow-route":
 			return _read_numbers(option, argument)
 		"--screenshot":
 			screenshot_path = argument
@@ -199,6 +216,14 @@ func _read_switch(option: String) -> String:
 	return ""
 
 
+func _read_follow_route(speed: String) -> String:
+	if not speed.is_valid_float() or speed.to_float() <= 0.0:
+		return "--follow-route is a positive speed in km/h"
+	follow_route_given = true
+	follow_route_speed_m_s = speed.to_float() / Instruments.KM_H_PER_M_S
+	return ""
+
+
 func _read_hold(drive: String) -> String:
 	var numbers := drive.split(",")
 	if numbers.size() != 2 or not Array(numbers).all(func(number): return number.is_valid_float()):
@@ -217,6 +242,8 @@ func _read_numbers(option: String, argument: String) -> String:
 			return _read_eye(argument)
 		"--record-seconds":
 			return _read_record_seconds(argument)
+		"--follow-route":
+			return _read_follow_route(argument)
 	return _read_hold(argument)
 
 

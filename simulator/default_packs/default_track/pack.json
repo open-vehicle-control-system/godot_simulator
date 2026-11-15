@@ -25,6 +25,7 @@
     "haze": {
       "visibility_m": 12000.0
     },
+    "route": "route.json",
     "spawn": {
       "position_m": [
         265.86,

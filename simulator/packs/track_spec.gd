@@ -22,6 +22,7 @@ var surfaces: Array[SurfaceRule] = []
 var trees: TreesSpec = null  ## null when the pack has no `trees`
 var signs: SignsSpec = null  ## null when the pack has no `signs`
 var decals: DecalsSpec = null  ## null when the pack has no `decals`
+var route: Route = null  ## the centre line; null when the pack has no `route`
 var spawn_position: Vector3
 var spawn_yaw_rad: float  ## about +Y, from +Z (Godot forward) towards +X; ROS yaw about z
 var labelled := false  ## true when its world is drawn with segmentation labels: not a pack field
@@ -75,6 +76,8 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 		spec.signs = SignsSpec.parse(reader_within_track, directory)
 	if reader.has("track.decals"):
 		spec.decals = DecalsSpec.parse(reader_within_track, directory)
+	if reader.has("track.route"):
+		spec.route = Route.parse(reader_within_track, directory)
 	if reader.error == "":
 		reader.error = reader_within_track.error
 	if reader.error != "":

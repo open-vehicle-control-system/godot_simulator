@@ -86,6 +86,18 @@ class BuiltPacks(unittest.TestCase):
         }
         self.assertEqual(set(committed) - set(built), compressed)
 
+    def test_the_track_has_its_centre_line_as_a_closed_route(self):
+        route = json.loads((self.track / self.manifest["track"]["route"]).read_text())
+        points = np.array(route["points_m"])
+        steps = np.hypot(*np.diff(np.vstack([points, points[:1]])[:, :2], axis=0).T)
+        self.assertTrue(route["closed"])
+        self.assertAlmostEqual(
+            steps.sum(), default_track.lap_length_m(default_track.lap_sections()), delta=2.0
+        )
+        self.assertLess(steps.max(), default_track.ROUTE_STEP_M * 1.5)
+        spawn = self.manifest["track"]["spawn"]["position_m"]
+        self.assertLess(np.hypot(*(points[:, :2] - spawn[:2]).T).min(), 1.5, "the spawn is on it")
+
     def test_the_track_is_cc0_with_a_licence(self):
         manifest = json.loads((self.track / "pack.json").read_text())
         self.assertEqual(manifest["format"], 1)

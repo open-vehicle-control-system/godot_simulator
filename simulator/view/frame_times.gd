@@ -22,16 +22,19 @@ var _physics_ms := 0.0
 var _worst_physics_ms := 0.0
 var _gpu_ms := 0.0
 var _worst_gpu_ms := 0.0
-var _worst_gpu_at := Vector3.ZERO
+var _worst_gpu_at := ""
+var _where := Callable()
 var _draw_calls := 0
 var _objects := 0
 var _primitives := 0
 
 
-func setup(tiles: TrackTiles, vehicle: Node3D) -> void:
-	## Reports the frames of the simulator showing `tiles` around `vehicle`.
+func setup(tiles: TrackTiles, vehicle: Node3D, where := Callable()) -> void:
+	## Reports the frames of the simulator showing `tiles` around `vehicle`; `where`, when
+	## given, tells where the vehicle is (along a route), else its position does.
 	_tiles = tiles
 	_vehicle = vehicle
+	_where = where
 	name = "FrameTimes"
 	_report_first_frame.call_deferred()
 
@@ -68,15 +71,14 @@ func _process(delta: float) -> void:
 			]
 		)
 	)
-	var at := _worst_gpu_at
 	var frames := maxi(_frames, 1)
 	print(
 		"timing: physics %.3f ms a step, worst %.3f ms" % [_physics_ms / frames, _worst_physics_ms]
 	)
 	print(
 		(
-			"timing: GPU %.1f ms a frame, worst %.1f ms at %.0f,%.0f,%.0f; "
-			% [_gpu_ms / frames, _worst_gpu_ms, at.z, at.x, at.y]
+			"timing: GPU %.1f ms a frame, worst %.1f ms at %s; "
+			% [_gpu_ms / frames, _worst_gpu_ms, _worst_gpu_at]
 		),
 		(
 			"%d draw calls, %d objects, %d thousand primitives a frame"
@@ -103,7 +105,7 @@ func _measure_rendering() -> void:
 	_gpu_ms += frame_gpu_ms
 	if frame_gpu_ms > _worst_gpu_ms:
 		_worst_gpu_ms = frame_gpu_ms
-		_worst_gpu_at = _vehicle.global_position
+		_worst_gpu_at = _location()
 	_draw_calls += RenderingServer.get_rendering_info(
 		RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME
 	)
@@ -129,3 +131,11 @@ func _report_first_frame() -> void:
 			% [Time.get_ticks_msec(), Time.get_unix_time_from_system()]
 		)
 	)
+
+
+func _location() -> String:
+	## Where the vehicle is: along its route, or its position in the track's frame (ROS x, y, z).
+	if _where.is_valid():
+		return _where.call()
+	var at := _vehicle.global_position
+	return "%.0f,%.0f,%.0f" % [at.z, at.x, at.y]

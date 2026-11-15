@@ -16,6 +16,7 @@ const PANEL_MAX_HEIGHT := 0.45  # of the window
 var view := "chase"
 var keyboard_driving := false  ## the arrow keys drive (--keyboard)
 var holding_drive := false  ## a set speed and steering are held (--hold)
+var following_route := false  ## the track's centre line is driven (--follow-route)
 var mirrors: Mirrors = null  ## the vehicle's mirrors, live only in the views that see them
 var lighting: Environment = null  ## what lights the window's view, when not the world's own
 
@@ -103,6 +104,8 @@ func _link_status() -> String:
 		return "keyboard: arrows drive"
 	if holding_drive:
 		return "holding a set speed and steering"
+	if following_route:
+		return "following the track's centre line"
 	if _link == null:
 		return "no link: standing still"
 	return "driven by OVCS" if _link.connected else "waiting for the OVCS link"

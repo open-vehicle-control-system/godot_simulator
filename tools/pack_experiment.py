@@ -42,6 +42,7 @@ import road_decals
 import road_markings
 import road_signs
 import roofs
+import route
 import secondary_roads
 import sign_faces
 import smooth_terrain
@@ -824,6 +825,7 @@ def write_pack(out, manifest, links):
 def write_circuit(experiment, out, textures, track_id, circuit):
     """Write a circuit's pack with what is derived from its orthophoto."""
     manifest, links, atlases = circuit_pack(experiment, track_id, circuit, textures)
+    lap = json.loads((experiment / "data" / track_id / "godot" / "track.json").read_text())
     directory = out / track_id
     directory.mkdir(parents=True, exist_ok=True)
     write_tree_atlases(directory, atlases)
@@ -835,6 +837,11 @@ def write_circuit(experiment, out, textures, track_id, circuit):
         out.parent / "work" / track_id,
         manifest,
         crown_colours(manifest["track"]["trees"]["impostors"], atlases),
+    )
+    manifest["track"]["route"] = route.write(
+        directory,
+        [ros(point) for point in lap["points"]],
+        closed=True,
     )
     write_pack(out, manifest, links)
 

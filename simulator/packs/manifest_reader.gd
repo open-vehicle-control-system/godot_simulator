@@ -45,6 +45,15 @@ func positive(path: String, below := INF) -> float:
 	return found
 
 
+func boolean(path: String) -> bool:
+	## The true or false at `path`, or false after recording an error.
+	var found: Variant = _lookup(path)
+	if found is bool:
+		return found
+	_record(path, "true or false")
+	return false
+
+
 func check(condition: bool, path: String) -> void:
 	## Records that the value at `path` is out of range unless `condition` holds.
 	if error == "" and not condition:

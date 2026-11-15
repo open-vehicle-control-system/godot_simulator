@@ -35,6 +35,8 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `vehicle/powertrain.gd` | The torque the motor gives the wheels through the gear in use, the driveline's inertia, drag and rolling resistance. Pure |
 | `vehicle/keyboard_drive.gd`, `vehicle/keyboard_driver.gd` | The actuation the arrow keys ask for under `--keyboard` (pure), and the node that reads the keys |
 | `vehicle/speed_control.gd`, `vehicle/speed_driver.gd` | Torques that hold a commanded speed, and the node that drives by them (`--hold`, `--drive-log`) |
+| `packs/route.gd` | A track's centre line: distance along it, nearest point, curvature. Pure |
+| `vehicle/route_following.gd`, `vehicle/route_driver.gd` | Steering and speed that follow a route (pure pursuit, slower in corners), and the node that drives by them (`--follow-route`) |
 | `vehicle/instrument_scales.gd` | Needle and steering wheel angles from the pack's scales. Pure |
 | `vehicle/instruments.gd` | Turns the cockpit's needles and steering wheel as the vehicle moves, the rev counter to the motor rpm OVCS reports |
 | `vehicle/mirrors.gd`, `vehicle/mirror.gdshader` | The mirrors: a view looking back per piece of mirror glass |
@@ -150,7 +152,13 @@ in first gear up to 4 m/s. A selected gear stays whatever the speed; `"automatic
 gear that pushes hardest at the driven wheels' speed, shifting up short of the rpm limit. There
 is no clutch, no shift time and no torque curve but the flat torque and power.
 
-`--hold` and `--drive-log` drive by a speed control (`SpeedControl`): a proportional-integral
+`--follow-route` drives the track's centre line (`RouteFollowing`): the steering is pure
+pursuit from the rear axle towards the line's point 0.6 s ahead (5 m at least), the speed the
+one asked for, lowered so that every corner within braking distance is taken at 60 % of the
+tyres' grip, braking at 2.5 m/s² before it. On the default track at 60 km/h the rear axle
+stays within a metre of the line.
+
+`--hold`, `--drive-log` and `--follow-route` drive by a speed control (`SpeedControl`): a proportional-integral
 control of the speed, drag and rolling fed forward, at most 3 m/s² either way, the motor
 pushing and the brakes slowing; standstill commanded and reached, the vehicle is parked. It is
 a test driver: it knows no limit of the vehicle's powertrain.

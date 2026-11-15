@@ -228,6 +228,10 @@ for a vehicle; x, y, z up for a world.
   is under a roof, a stand or the vehicle; 0 does without, and saves the window 0.3 ms a
   frame. It changes the window only, never the stereo cameras' images.
 - `spawn` is where the vehicle starts, yaw counter-clockwise from x seen from above.
+- `route`, optional, names a JSON file of the track's centre line, which `--follow-route`
+  drives: `points_m`, its points in the track's frame (x, y, z, metres, a point every metre or
+  two), and `closed`, true for a circuit, whose last point joins its first. At least two points;
+  the builders write it from the lap they lay (`tools/route.py`).
 - `ground`, `surfaces`, `trees`, `signs` and `decals` are optional: see [Surfaces](#surfaces),
   [Trees](#trees), [Signs and signals](#signs-and-signals) and [Decals](#decals).
   A material no surface covers is drawn as its glTF PBR definition.

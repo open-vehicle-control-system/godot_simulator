@@ -26,6 +26,7 @@ import ground_classes
 import numpy as np
 import osm
 import procedural_textures
+import route
 import sign_faces
 import smooth_terrain
 import track_surfaces
@@ -41,6 +42,7 @@ PHOTO_PX_PER_M = 1.0 / track_surfaces.TRACK_MAP_M_PER_PX
 LATTICE_M = 4.0  # the terrain mesh's spacing; the ground is smooth at that scale
 GROUND_STEP_M = 2.0
 SECTION_M = 1.0
+ROUTE_STEP_M = 2.0  # between the route's points
 LAP_SMOOTHING_M = 4.0  # eases the curvature into and out of each arc
 HALF_WIDTH_M = 5.0
 # The lap: straights (metres; None for the two whose lengths close the loop) and arcs
@@ -638,6 +640,15 @@ def write_sky(directory, cache=tree_impostors.CACHE):
     shutil.copyfile(sky, directory / "sky.hdr")
 
 
+def route_points(sections, terrain):
+    """Return the lap's centre line for route.json: a point every ROUTE_STEP_M, on the ground."""
+    step = max(1, round(ROUTE_STEP_M / SECTION_M))
+    east = np.asarray(sections["x"])[::step]
+    north = np.asarray(sections["y"])[::step]
+    heights = terrain.height_m(east, north)
+    return [_pack_position(e, n, h) for e, n, h in zip(east, north, heights, strict=True)]
+
+
 def manifest(sections, terrain, length_m, sign_codes):
     """Return the default track's pack.json."""
     s_index = round(SPAWN_S_M / SECTION_M)
@@ -664,6 +675,7 @@ def manifest(sections, terrain, length_m, sign_codes):
             "sky": "sky.hdr",
             "sun": SUN,
             "haze": {"visibility_m": VISIBILITY_M},
+            "route": route.FILE_NAME,
             "spawn": {
                 "position_m": _pack_position(east, north, ground_m),
                 "yaw_deg": round(math.degrees(math.atan2(tx, -ty)), 2),
@@ -771,6 +783,7 @@ def write(directory, work):
     )
     if homeless:
         raise ValueError(f"default track: {homeless} trees or signs stand on no tile")
+    route.write(directory, route_points(sections, terrain), closed=True)
     jobs = write_textures(directory, work)
     write_sky(directory)
     return manifest(sections, terrain, length_m, codes), jobs

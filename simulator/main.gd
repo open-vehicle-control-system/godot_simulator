@@ -29,6 +29,9 @@ func _ready() -> void:
 			_quit_with("%s (packs: %s)" % [found["error"], ", ".join(_pack_directories(options))])
 			return
 	var track: TrackSpec = track_found["track"]
+	if options.follow_route_given and track.route == null:
+		_quit_with("--follow-route: the track %s has no route" % track.id)
+		return
 	if options.spawn_given:
 		track.move_spawn(options.spawn_position_m, options.spawn_yaw_deg)
 	track.labelled = options.records_ground_truth()
@@ -68,10 +71,17 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 	vehicle.place(track.spawn_transform(), options.hold_speed_m_s if options.hold_given else 0.0)
 	var tiles: TrackTiles = world_found["world"]
 	tiles.follow(vehicle)
+	var route_driver: RouteDriver = null
+	if options.follow_route_given:
+		route_driver = RouteDriver.new()
+		add_child(route_driver)
+		route_driver.follow(vehicle, track.route, options.follow_route_speed_m_s)
 	if options.timing:
 		var frame_times := FrameTimes.new()
 		add_child(frame_times)
-		frame_times.setup(tiles, vehicle)
+		frame_times.setup(
+			tiles, vehicle, route_driver.where if route_driver != null else Callable()
+		)
 	var stereo := StereoCamera.new()
 	add_child(stereo)
 	stereo.setup(vehicle, spec.stereo)
@@ -97,6 +107,7 @@ func _build(options: SimulatorOptions, track: TrackSpec, spec: VehicleSpec) -> S
 	var viewer := Viewer.new()
 	viewer.keyboard_driving = options.keyboard
 	viewer.holding_drive = options.hold_given
+	viewer.following_route = options.follow_route_given
 	viewer.lighting = TrackWorld.window_lighting(lighting["environment"], track)
 	var upscaling := Upscaling.new()
 	add_child(upscaling)
