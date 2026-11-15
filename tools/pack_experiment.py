@@ -73,7 +73,7 @@ CIRCUITS = {
     "spa": {
         "name": "Spa-Francorchamps",
         "build": "Spa",
-        "trees_drawn_m": 600.0,
+        "trees_drawn_m": 1500.0,
         "visibility_m": 16000.0,
     },
     "mettet": {
