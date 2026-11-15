@@ -35,8 +35,12 @@ contributors (ODbL 1.0). Not bundled: see [Pack format](./docs/pack_format.md) a
 
 ## Run
 
-You need Godot 4.7 (`mise install` puts it on the PATH, or set `GODOT` to its binary). A clean
-clone drives the default car on the default track:
+You need Godot **4.7.2** (standard build, not .NET), the version `mise.toml` pins:
+`mise install` puts it on the PATH, or download it from
+[godotengine.org](https://godotengine.org/download/archive/4.7.2-stable/) and set `GODOT` to
+its binary (`GODOT=~/Apps/godot-4.7.2 ./simulate.sh`). Other versions are not supported:
+Godot 4.6 runs it, but its images differ slightly, so recordings made on one version do not
+match the other's. A clean clone drives the default car on the default track:
 
 ```sh
 ./simulate.sh --keyboard
