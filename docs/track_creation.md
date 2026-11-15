@@ -493,6 +493,11 @@ texture.
   CC-BY 4.0, OpenStreetMap is ODbL 1.0, so a track pack built from them is
   `CC-BY-4.0 AND ODbL-1.0`. Nothing without a licence that allows redistribution goes into a pack
   meant for release.
+- **Credit as each licence asks.** The SPW's CC BY 4.0 asks for the source and an explicit
+  mention of what was modified (cropping, smoothing, grading, classification, tiling); the ODbL
+  asks for "© OpenStreetMap contributors" and a link to https://www.openstreetmap.org/copyright;
+  CC BY assets name their author, title, source and licence, and what was changed. Each goes in
+  the pack's `attribution` and its `LICENCE.txt`.
 - **Every track is tiled**, circuits as well as towns: the pack holds tiles (each with its meshes,
   ground maps, collision and objects) and a coarse far terrain, and the simulator loads only the
   tiles near the vehicle. Builders cut terrain, roads and maps on tile edges without seams, and

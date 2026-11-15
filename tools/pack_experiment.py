@@ -49,9 +49,18 @@ import track_surfaces
 import track_tiles
 from PIL import Image
 
+# CC BY 4.0 as the SPW publishes it asks for the source and an explicit mention of what was
+# changed; the ODbL asks for the copyright notice and a link to its terms.
 WALLONIA_ATTRIBUTION = [
-    "Service public de Wallonie: LiDAR 2021-2022 and orthophotos 2026, CC-BY 4.0",
-    "OpenStreetMap contributors, ODbL 1.0",
+    "Source: Service public de Wallonie (SPW), Relief de la Wallonie, MNT 1 m and MNS 50 cm"
+    " 2021-2022, and Orthophotos 2026 Printemps (ORTHOS_2026_PRINTEMPS),"
+    " https://geoportail.wallonie.be, CC BY 4.0"
+    " (https://creativecommons.org/licenses/by/4.0/)."
+    " Modified: cropped to the track's area; terrain gap-filled, smoothed and cut into tiles;"
+    " buildings and trees derived from the surface model; the orthophoto colour-graded,"
+    " classified into surfaces and resampled.",
+    "Map data © OpenStreetMap contributors, https://www.openstreetmap.org/copyright, ODbL 1.0:"
+    " roads, parking lots, buildings, signs and the track's line derived from it.",
     "Poly Haven: sky kloofendal_48d_partly_cloudy_puresky, CC0",
     "Poly Haven: models fir_tree_01, pine_tree_01 and jacaranda_tree, drawn as impostors, CC0",
 ]

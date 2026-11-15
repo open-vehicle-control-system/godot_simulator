@@ -76,3 +76,19 @@ Code also loads it through the project's `track-creator` skill.
 
 Contributing: read [CLAUDE.md](./CLAUDE.md) for the process and [CODE_STYLING.md](./CODE_STYLING.md)
 for the code rules. Licence: MIT ([LICENCE.txt](./LICENCE.txt)); packs carry their own.
+
+## Licences and credits
+
+The simulator's code is MIT ([LICENCE.txt](./LICENCE.txt)). Every pack states its own licence
+and credits in its `pack.json` `attribution`, with a `LICENCE.txt` beside it.
+
+- **Bundled default packs** (`simulator/default_packs/`): `default_track` and `default_car`,
+  generated from code by `tools/default_packs.py` and dedicated to the public domain (CC0 1.0).
+- **Packs the builders make** from public data carry these sources' terms:
+  - Service public de Wallonie (SPW): Relief de la Wallonie (MNT, MNS 2021-2022) and
+    orthophotos, https://geoportail.wallonie.be, CC BY 4.0; a pack states what was modified.
+  - Map data © OpenStreetMap contributors, https://www.openstreetmap.org/copyright, ODbL 1.0.
+  - Poly Haven (https://polyhaven.com) and ambientCG (https://ambientcg.com): texture sets, sky
+    and tree models, CC0.
+  - Road sign faces drawn by `tools/sign_faces.py` after the Belgian highway code's designs.
+
