@@ -1,6 +1,6 @@
 extends TestCase
 ## Tyres grip only so much: the vehicle never corners harder than its pack's lateral grip, and
-## steering beyond that makes it run wide (understeer) instead of turning tighter.
+## below walking pace, where the motion is kinematic, steering beyond it makes it run wide.
 
 const WHEELBASE_M := 2.5
 const GRIP_M_S2 := 8.0
@@ -33,15 +33,19 @@ func test_standing_still_turns_the_wheels_freely() -> void:
 	)
 
 
-func test_full_lock_at_180_km_h_corners_at_the_grip_and_runs_wide() -> void:
+func test_full_lock_at_180_km_h_never_corners_harder_than_the_grip() -> void:
 	var vehicle := await _vehicle_on_flat_ground()
+	var hardest_m_s2 := 0.0
 
 	vehicle.command(50.0, 0.5)
-	await wait_physics_frames(10)
+	for step in Engine.physics_ticks_per_second * 3:
+		await wait_physics_frames(1)
+		var lateral_m_s2: float = vehicle.motion_state()["linear_acceleration_m_s2"].x
+		hardest_m_s2 = maxf(hardest_m_s2, absf(lateral_m_s2))
 
-	assert_almost_eq(vehicle.yaw_rate_rad_s, GRIP_M_S2 / 50.0, 1e-4)
-	var lateral_m_s2: float = vehicle.motion_state()["linear_acceleration_m_s2"].x
-	assert_true(lateral_m_s2 <= GRIP_M_S2 + 1.5, "IMU lateral %.2f m/s2" % lateral_m_s2)
+	# The IMU sits at the origin, ahead of the centre of gravity: it also feels the yaw
+	# accelerating.
+	assert_true(hardest_m_s2 <= GRIP_M_S2 + 1.5, "IMU lateral %.2f m/s2" % hardest_m_s2)
 	assert_almost_eq(vehicle.steering_rad, 0.5, 1e-9, "the wheels stay turned")
 
 

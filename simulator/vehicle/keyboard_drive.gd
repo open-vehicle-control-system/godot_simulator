@@ -12,8 +12,9 @@ const MAX_SPEED_M_S := 50.0
 const MAX_REVERSE_SPEED_M_S := 4.0
 const MAX_STEERING_RAD := 0.5
 const STEERING_RATE_RAD_S := 1.2
-## At top speed the steering lock shrinks to this share of MAX_STEERING_RAD.
-const STEERING_SHARE_AT_TOP_SPEED := 0.15
+## At top speed the steering lock shrinks to this share of MAX_STEERING_RAD: enough left to
+## steer into a slide.
+const STEERING_SHARE_AT_TOP_SPEED := 0.4
 ## Below this speed Down reverses instead of braking.
 const STOPPED_M_S := 0.05
 

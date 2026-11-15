@@ -185,6 +185,16 @@ def manifest():
             "wheel_radius_m": WHEEL_RADIUS_M,
             "wheel_width_m": WHEEL_WIDTH_M,
             "max_lateral_acceleration_m_s2": 8.0,
+            # A front-wheel drive compact: 60 % of its weight on the front axle.
+            "mass_kg": 1200.0,
+            "centre_of_gravity_x_m": round(
+                REAR_AXLE_X_M + 0.6 * (FRONT_AXLE_X_M - REAR_AXLE_X_M), 4
+            ),
+            "centre_of_gravity_height_m": 0.55,
+            "yaw_inertia_kg_m2": 1750.0,
+            "front_cornering_stiffness_n_per_rad": 100000.0,
+            "rear_cornering_stiffness_n_per_rad": 95000.0,
+            "driven_axle": "front",
             "body": {"size_m": [3.9, 1.56, 0.99], "centre_m": [0.0, 0.0, 0.94]},
             "driver_eye_m": [-0.35, 0.36, 1.2],
             "driver_pitch_deg": -3.0,

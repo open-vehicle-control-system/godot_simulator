@@ -204,3 +204,23 @@ func _vehicle_with_stereo(camera_fields: Dictionary) -> Dictionary:
 	manifest["vehicle"]["stereo"].merge(camera_fields)
 	PackFixtures.write_pack(directory, manifest)
 	return PackLibrary.scan([directory]).load_vehicle("small_car")
+
+
+func test_refuses_dynamics_out_of_range() -> void:
+	var cases := {
+		"mass_kg": [0.0, "small_car: vehicle.mass_kg is out of range"],
+		"centre_of_gravity_x_m": [1.5, "small_car: vehicle.centre_of_gravity_x_m is out of range"],
+		"yaw_inertia_kg_m2": [-1.0, "small_car: vehicle.yaw_inertia_kg_m2 is out of range"],
+		"rear_cornering_stiffness_n_per_rad":
+		[0.0, "small_car: vehicle.rear_cornering_stiffness_n_per_rad is out of range"],
+		"driven_axle": ["middle", "small_car: vehicle.driven_axle is not one of front, rear, all"],
+	}
+	for field in cases:
+		var directory := PackFixtures.fresh_directory("dynamics_" + field)
+		var manifest := PackFixtures.vehicle_manifest("small_car")
+		manifest["vehicle"][field] = cases[field][0]
+		PackFixtures.write_pack(directory, manifest)
+
+		var found := PackLibrary.scan([directory]).load_vehicle("small_car")
+
+		assert_eq(found, {"error": cases[field][1]}, field)

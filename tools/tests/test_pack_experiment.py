@@ -82,6 +82,30 @@ class InstrumentsTest(unittest.TestCase):
         self.assertEqual(list(pack_experiment.instruments(only_speed)), ["speedometer"])
 
 
+class DynamicsTest(unittest.TestCase):
+    """What the dynamic bicycle model moves a vehicle by."""
+
+    def test_centre_of_gravity_sits_where_the_weight_split_puts_it(self):
+        fields = pack_experiment.dynamics("ovcs1", 1.122, -1.319)
+
+        # 48 % of the weight on the front axle: 48 % of the wheelbase ahead of the rear one.
+        self.assertAlmostEqual(fields["centre_of_gravity_x_m"], -1.319 + 0.48 * 2.441, places=3)
+        self.assertNotIn("front_weight_share", fields)
+
+    def test_every_vehicle_has_the_fields_a_pack_requires(self):
+        required = {
+            "centre_of_gravity_x_m",
+            "centre_of_gravity_height_m",
+            "mass_kg",
+            "yaw_inertia_kg_m2",
+            "front_cornering_stiffness_n_per_rad",
+            "rear_cornering_stiffness_n_per_rad",
+            "driven_axle",
+        }
+        for vehicle_id in pack_experiment.DYNAMICS:
+            self.assertEqual(set(pack_experiment.dynamics(vehicle_id, 1.0, -1.0)), required)
+
+
 class MaterialNamesTest(unittest.TestCase):
     """The materials of a binary glTF."""
 

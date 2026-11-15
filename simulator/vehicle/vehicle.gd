@@ -1,7 +1,8 @@
 class_name Vehicle
 extends Node3D
-## The vehicle OVCS drives: it moves at the speed and steering last commanded, by the bicycle
-## model, resting on the ground below it, and counts the distance its wheels roll.
+## The vehicle OVCS drives: it moves at the speed and steering last commanded, by the dynamic
+## bicycle model (its tyres can slip), resting on the ground below it, and counts the distance
+## its wheels roll.
 ##
 ## Frame: +X left, +Y up, +Z forward, the origin on the ground.
 
@@ -22,7 +23,7 @@ var longitudinal_acceleration_m_s2 := 0.0
 
 var _commanded_speed_m_s := 0.0
 var _commanded_steering_rad := 0.0
-var _yaw_rad := 0.0
+var _motion := DynamicBicycle.rolling(0.0, 0.0)
 var _placed := Transform3D()
 var _wheels: Array[Node3D] = []  # front left, front right, rear left, rear right
 var _body_shape := BoxShape3D.new()
@@ -66,19 +67,26 @@ func stop() -> void:
 
 func motion_state() -> Dictionary:
 	## The pose in the world and, in the vehicle frame, the velocities and what an IMU reads
-	## (the motion's acceleration plus gravity's reaction), all of the origin, which turns about
-	## a point beside the rear axle.
+	## (the motion's acceleration plus gravity's reaction), all of the origin.
 	var basis := global_basis.orthonormalized()
 	var gravity_reaction := basis.inverse() * Vector3(0.0, GRAVITY_M_S2, 0.0)
-	var ahead_of_rear_axle_m := -spec.rear_axle_z
+	var ahead_of_centre_m := -spec.centre_of_gravity_z
+	var lateral_m_s: float = _motion["lateral_velocity_m_s"]
+	var lateral_m_s2: float = _motion["lateral_acceleration_m_s2"]
+	var yaw_m_s2: float = _motion["yaw_acceleration_rad_s2"]
 	var motion_acceleration := Vector3(
-		speed_m_s * yaw_rate_rad_s,
+		lateral_m_s2 + ahead_of_centre_m * yaw_m_s2,
 		0.0,
-		longitudinal_acceleration_m_s2 - ahead_of_rear_axle_m * yaw_rate_rad_s * yaw_rate_rad_s
+		(
+			longitudinal_acceleration_m_s2
+			- lateral_m_s * yaw_rate_rad_s
+			- ahead_of_centre_m * yaw_rate_rad_s * yaw_rate_rad_s
+		)
 	)
 	return {
 		"pose": global_transform,
-		"linear_velocity_m_s": Vector3(ahead_of_rear_axle_m * yaw_rate_rad_s, 0.0, speed_m_s),
+		"linear_velocity_m_s":
+		Vector3(lateral_m_s + ahead_of_centre_m * yaw_rate_rad_s, 0.0, speed_m_s),
 		"angular_velocity_rad_s": Vector3(0.0, yaw_rate_rad_s, 0.0),
 		"linear_acceleration_m_s2": motion_acceleration + gravity_reaction,
 	}
@@ -88,35 +96,34 @@ func _physics_process(delta: float) -> void:
 	if spec == null:
 		return
 	# The yaw is this node's own state, so a pose tilted onto slopes never feeds back into it;
-	# only a move from outside (a spawn) resets it.
+	# only a move from outside (a spawn) resets it, and the slide with it.
 	if not global_transform.is_equal_approx(_placed):
-		_yaw_rad = atan2(global_basis.z.x, global_basis.z.z)
+		var yaw_rad := atan2(global_basis.z.x, global_basis.z.z)
+		_motion = DynamicBicycle.rolling(yaw_rad, speed_m_s)
 	var previous_speed_m_s := speed_m_s
-	speed_m_s = _commanded_speed_m_s
 	steering_rad = _commanded_steering_rad
-	var rear_axle := global_position + BicycleModel.heading(_yaw_rad) * spec.rear_axle_z
-	var turning_rad := BicycleModel.grip_limited_steering(
-		steering_rad, speed_m_s, spec.wheelbase_m(), spec.max_lateral_acceleration_m_s2
-	)
-	var motion := BicycleModel.advance(
-		{"rear_axle": rear_axle, "yaw_rad": _yaw_rad},
-		speed_m_s,
-		turning_rad,
-		spec.wheelbase_m(),
-		delta
-	)
-	var heading := BicycleModel.heading(motion["yaw_rad"])
-	var target := _on_ground(motion["rear_axle"] - heading * spec.rear_axle_z, heading)
+	var start := global_position
+	var start_yaw_rad: float = _motion["yaw_rad"]
+	_motion["centre"] = start + BicycleModel.heading(start_yaw_rad) * spec.centre_of_gravity_z
+	_motion = DynamicBicycle.advance(_motion, spec, _commanded_speed_m_s, steering_rad, delta)
+	speed_m_s = _motion["speed_m_s"]
+	yaw_rate_rad_s = _motion["yaw_rate_rad_s"]
+	var heading := BicycleModel.heading(_motion["yaw_rad"])
+	var origin: Vector3 = _motion["centre"] - heading * spec.centre_of_gravity_z
+	var target := _on_ground(origin, heading)
 	# Steering always turns the vehicle, so it can turn away from what it touches.
-	_yaw_rad = motion["yaw_rad"]
-	yaw_rate_rad_s = motion["yaw_rate_rad_s"]
 	var move := _move_past_obstacles(target)
 	if move["speed_kept"] < 1.0:
 		# Against an obstacle: it slides along it, keeping the share of its speed that runs
 		# along the obstacle; head-on, it stops.
+		# The model keeps the speed the wheels roll at, so the next command is no jolt to the
+		# tyres; the slide loses its share.
 		speed_m_s *= move["speed_kept"]
+		_motion["lateral_velocity_m_s"] *= move["speed_kept"]
 		target = _on_ground(move["origin"], heading)
-	odometer_m += signf(speed_m_s) * move["distance_m"]
+	# The wheels roll the part of the move along the heading.
+	var moved: Vector3 = move["origin"] - start
+	odometer_m += Vector2(moved.x, moved.z).dot(Vector2(heading.x, heading.z))
 	longitudinal_acceleration_m_s2 = (speed_m_s - previous_speed_m_s) / delta
 	_placed = target
 	global_transform = _placed

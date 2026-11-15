@@ -48,6 +48,7 @@ class StereoOptics:
 const MAX_FIELD_OF_VIEW_DEG := 180.0
 ## The widest the view drawn for a distorted image is, in images.
 const MAX_OVERSCAN := 2.0
+const DRIVEN_AXLES := ["front", "rear", "all"]
 
 var id: String
 var name: String
@@ -59,7 +60,14 @@ var front_track_m: float
 var rear_track_m: float
 var wheel_radius_m: float
 var wheel_width_m: float
-var max_lateral_acceleration_m_s2: float  ## the tyres' grip: the hardest the vehicle corners
+var max_lateral_acceleration_m_s2: float  ## the tyres' peak grip: the hardest the vehicle corners
+var mass_kg: float
+var centre_of_gravity_z: float
+var centre_of_gravity_height_m: float
+var yaw_inertia_kg_m2: float
+var front_cornering_stiffness_n_per_rad: float  ## the front axle's, both tyres
+var rear_cornering_stiffness_n_per_rad: float
+var driven_axle: String  ## one of DRIVEN_AXLES
 var body_size: Vector3
 var body_centre: Vector3
 var driver_eye: Vector3
@@ -86,6 +94,7 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 	spec.wheel_radius_m = reader.positive("vehicle.wheel_radius_m")
 	spec.wheel_width_m = reader.positive("vehicle.wheel_width_m")
 	spec.max_lateral_acceleration_m_s2 = reader.positive("vehicle.max_lateral_acceleration_m_s2")
+	spec._read_dynamics(reader)
 	spec.body_size = reader.ros_vector("vehicle.body.size_m")
 	spec.body_centre = reader.ros_vector("vehicle.body.centre_m")
 	spec.driver_eye = reader.ros_vector("vehicle.driver_eye_m")
@@ -111,6 +120,25 @@ static func parse(manifest: Dictionary, directory: String) -> Dictionary:
 	if reader.error != "":
 		return {"error": reader.error}
 	return {"vehicle": spec}
+
+
+func _read_dynamics(reader: ManifestReader) -> void:
+	## What the dynamic bicycle model moves the vehicle by.
+	mass_kg = reader.positive("vehicle.mass_kg")
+	centre_of_gravity_z = reader.number("vehicle.centre_of_gravity_x_m")
+	reader.check(
+		centre_of_gravity_z > rear_axle_z and centre_of_gravity_z < front_axle_z,
+		"vehicle.centre_of_gravity_x_m"
+	)
+	centre_of_gravity_height_m = reader.positive("vehicle.centre_of_gravity_height_m")
+	yaw_inertia_kg_m2 = reader.positive("vehicle.yaw_inertia_kg_m2")
+	front_cornering_stiffness_n_per_rad = reader.positive(
+		"vehicle.front_cornering_stiffness_n_per_rad"
+	)
+	rear_cornering_stiffness_n_per_rad = reader.positive(
+		"vehicle.rear_cornering_stiffness_n_per_rad"
+	)
+	driven_axle = reader.one_of("vehicle.driven_axle", DRIVEN_AXLES)
 
 
 func _read_camera_effects(reader: ManifestReader) -> void:

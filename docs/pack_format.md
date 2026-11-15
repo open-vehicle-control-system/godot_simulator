@@ -53,6 +53,13 @@ for a vehicle; x, y, z up for a world.
   "wheel_radius_m": 0.296,
   "wheel_width_m": 0.2,
   "max_lateral_acceleration_m_s2": 7.8,
+  "mass_kg": 1230.0,
+  "centre_of_gravity_x_m": -0.1473,
+  "centre_of_gravity_height_m": 0.53,
+  "yaw_inertia_kg_m2": 1900.0,
+  "front_cornering_stiffness_n_per_rad": 80000.0,
+  "rear_cornering_stiffness_n_per_rad": 130000.0,
+  "driven_axle": "front",
   "body": {"size_m": [3.85, 1.62, 1.05], "centre_m": [0.0, 0.0, 0.85]},
   "driver_eye_m": [-0.178, 0.381, 1.106],
   "driver_pitch_deg": -2.82,
@@ -79,11 +86,22 @@ for a vehicle; x, y, z up for a world.
 ```
 
 - The origin is on the ground; axle positions are along x.
-- `max_lateral_acceleration_m_s2` is the tyres' grip: the vehicle never corners harder than
-  this; steered beyond it, it runs wide. Road tyres on dry asphalt hold about 0.8 g.
+- `max_lateral_acceleration_m_s2` is the tyres' peak grip: the vehicle never corners harder
+  than this; steered beyond it, it runs wide or slides. Road tyres on dry asphalt hold about
+  0.8 g.
+- The rest moves the vehicle by the [dynamic bicycle model](./architecture.md#the-vehicles-motion):
+  `mass_kg`; the centre of gravity's position along x (`centre_of_gravity_x_m`, strictly between
+  the axles: the front axle carries the share of the weight the centre of gravity is behind it
+  by) and its `centre_of_gravity_height_m`, which sets how much load braking moves to the front;
+  `yaw_inertia_kg_m2` about the vertical, near mass times the two axle distances for most cars;
+  each axle's cornering stiffness, both its tyres' side force per radian of slip at its static
+  load, typically 14 to 20 times that load per radian for road tyres, the rear stiffer for a
+  mildly understeering car; and `driven_axle`, `front`, `rear` or `all`, which carries
+  traction.
 - `body` is a box: the placeholder drawn when there is no `model`.
-- Lengths, the wheel radius, the stereo resolution, baseline and rate are positive, the field of
-  view under 180°, and the front axle ahead of the rear one; a pack that breaks this is refused.
+- Lengths, the wheel radius, the mass, inertia and stiffnesses, the stereo resolution, baseline
+  and rate are positive, the field of view under 180°, and the front axle ahead of the rear one;
+  a pack that breaks this is refused.
 - `driver_pitch_deg` tilts the cockpit view up; negative looks down.
 - `stereo.mount_m` is midway between the two cameras; positive `pitch_deg` tilts them down. See
   [Stereo camera](./stereo.md).

@@ -1,22 +1,6 @@
 extends TestCase
-## The vehicle follows the speed and steering OVCS commands: a bicycle model about the rear
-## axle, kept on the ground.
-
-
-func test_bicycle_model_traces_its_turning_circle() -> void:
-	var wheelbase_m := 2.5
-	var radius_m := 10.0
-	var steering_rad := atan(wheelbase_m / radius_m)
-	var motion := {"rear_axle": Vector3.ZERO, "yaw_rad": 0.0}
-
-	for step in 1000:
-		motion = BicycleModel.advance(motion, 2.0, steering_rad, wheelbase_m, 0.01)
-
-	# Heading +Z and turning left (+X): the centre is radius_m to the left.
-	var centre := Vector3(radius_m, 0.0, 0.0)
-	assert_almost_eq(motion["rear_axle"].distance_to(centre), radius_m, 0.05)
-	assert_almost_eq(motion["yaw_rad"], 20.0 / radius_m, 1e-6)
-	assert_almost_eq(motion["yaw_rate_rad_s"], 2.0 / radius_m, 1e-6)
+## The vehicle follows the speed and steering OVCS commands, by the dynamic bicycle model, kept on
+## the ground.
 
 
 func test_stands_on_the_ground_at_the_spawn_pose() -> void:
@@ -80,22 +64,65 @@ func _vehicle_on_flat_track(test_name: String, spawn: Vector3) -> Vehicle:
 	return vehicle
 
 
-func test_reports_the_motion_of_its_origin_ahead_of_the_rear_axle() -> void:
+func test_reports_the_motion_of_its_origin_in_a_steady_slow_turn() -> void:
 	var vehicle := await _vehicle_on_flat_track("turning_state", Vector3.ZERO)
 	var steering_rad := 0.3
 
 	vehicle.command(5.0, steering_rad)
-	await wait_physics_frames(10)
+	await wait_physics_frames(Engine.physics_ticks_per_second * 2)
 	var state := vehicle.motion_state()
 
-	# The fixture's origin is 1.3 m ahead of the rear axle.
+	# Slow, the tyres barely slip: the turn is the kinematic one about the rear axle, which the
+	# fixture's origin is 1.3 m ahead of.
 	var yaw_rate := 5.0 * tan(steering_rad) / 2.5
-	assert_almost_eq(vehicle.yaw_rate_rad_s, yaw_rate, 1e-5)
-	assert_almost_eq(state["linear_velocity_m_s"], Vector3(1.3 * yaw_rate, 0.0, 5.0), 1e-4)
+	assert_almost_eq(vehicle.yaw_rate_rad_s, yaw_rate, yaw_rate * 0.05)
+	assert_almost_eq(state["linear_velocity_m_s"], Vector3(1.3 * yaw_rate, 0.0, 5.0), 0.15)
 	var expected_acceleration := Vector3(
-		5.0 * yaw_rate, Vehicle.GRAVITY_M_S2, -1.3 * yaw_rate * yaw_rate
+		5.0 * vehicle.yaw_rate_rad_s, Vehicle.GRAVITY_M_S2, -1.3 * yaw_rate * yaw_rate
 	)
-	assert_almost_eq(state["linear_acceleration_m_s2"], expected_acceleration, 1e-3)
+	assert_almost_eq(state["linear_acceleration_m_s2"], expected_acceleration, 0.1)
+
+
+func test_braking_hard_in_a_fast_corner_slides_it_sideways() -> void:
+	var vehicle := await _vehicle_on_wide_ground()
+	vehicle.command(22.0, 0.04)
+	await wait_physics_frames(Engine.physics_ticks_per_second * 4)
+	var speed_m_s := 22.0
+
+	for step in Engine.physics_ticks_per_second:
+		speed_m_s -= 6.0 / Engine.physics_ticks_per_second
+		vehicle.command(speed_m_s, 0.04)
+		await wait_physics_frames(1)
+	var before := vehicle.global_position
+	await wait_physics_frames(1)
+
+	var state := vehicle.motion_state()
+	var velocity: Vector3 = state["linear_velocity_m_s"]
+	assert_true(velocity.x < -2.0, "sliding out of the turn: %s" % velocity)
+	var travel := vehicle.global_position - before
+	var heading := vehicle.global_basis.z
+	var angle_deg := rad_to_deg(Vector2(heading.x, heading.z).angle_to(Vector2(travel.x, travel.z)))
+	assert_true(absf(angle_deg) > 10.0, "heading %.1f deg off its path" % angle_deg)
+	assert_almost_eq(float(state["angular_velocity_rad_s"].y), vehicle.yaw_rate_rad_s, 1e-6)
+
+
+func _vehicle_on_wide_ground() -> Vehicle:
+	var directory := PackFixtures.fresh_directory("motion_wide")
+	PackFixtures.write_pack(directory, PackFixtures.vehicle_manifest("small_car"))
+	var spec: VehicleSpec = PackLibrary.scan([directory]).load_vehicle("small_car")["vehicle"]
+	var ground := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(4000.0, 1.0, 4000.0)
+	shape.shape = box
+	ground.add_child(shape)
+	ground.position = Vector3(0.0, -0.5, 0.0)
+	add_child(ground)
+	var vehicle := Vehicle.new()
+	add_child(vehicle)
+	vehicle.setup(spec, VehicleModel.build(spec)["model"])
+	await wait_physics_frames(2)
+	return vehicle
 
 
 func test_turns_left_under_positive_steering() -> void:

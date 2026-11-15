@@ -62,6 +62,15 @@ func test_steers_less_at_speed() -> void:
 	assert_true(drive["steering_rad"] < KeyboardDrive.MAX_STEERING_RAD * 0.5, str(drive))
 
 
+func test_keeps_enough_lock_at_speed_to_steer_into_a_slide() -> void:
+	var fast := {"speed_m_s": 25.0, "steering_rad": 0.0}
+
+	var drive := _hold({"right": true}, 1.0, fast)
+
+	# A slide of 17 degrees is caught by steering about as much the other way.
+	assert_true(drive["steering_rad"] < -0.3, str(drive))
+
+
 func _hold(
 	keys: Dictionary, seconds: float, start := {"speed_m_s": 0.0, "steering_rad": 0.0}
 ) -> Dictionary:

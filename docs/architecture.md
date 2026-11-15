@@ -24,7 +24,8 @@ OVCS VMS ── CAN ── simulated hardware ── SimulatorCore.Link ──TC
 | `packs/vehicle_spec.gd`, `packs/track_spec.gd` | A pack's manifest, validated, in Godot's frames |
 | `packs/instruments_spec.gd`, `packs/mirrors_spec.gd` | A vehicle's cockpit instruments and mirrors, validated |
 | `vehicle/vehicle_model.gd` | The vehicle's meshes, from its glTF or a placeholder |
-| `vehicle/bicycle_model.gd` | The kinematic bicycle model. Pure |
+| `vehicle/dynamic_bicycle.gd` | The dynamic bicycle model: tyres that slip. Pure |
+| `vehicle/bicycle_model.gd` | The kinematic bicycle model, the slow limit of the dynamic one. Pure |
 | `vehicle/vehicle.gd` | The vehicle: follows the commanded speed and steering on the ground, keeps an odometer, reports its motion |
 | `vehicle/instrument_scales.gd` | Needle and steering wheel angles from the pack's scales. Pure |
 | `vehicle/instruments.gd` | Turns the cockpit's needles and steering wheel as the vehicle moves |
@@ -75,18 +76,36 @@ Godot's.
 
 ## The vehicle's motion
 
-OVCS owns the motion: the vehicle moves at the speed and steering angle of the last drive, by a
-bicycle model about the rear axle, and rests on the ground under its four wheels: a ray below
-each wheel finds its contact, the body follows the plane through them (pitch and roll), and each
-wheel rises or drops within a short suspension travel to touch its own contact. Its state
-(velocity, IMU) is the origin's, which turns about the same point as the rear axle. With no
-drive for half a second, or no link, it is commanded to stop.
+OVCS owns the speed: the vehicle rolls along its heading at the speed of the last drive, and
+steers by its steering angle; it rests on the ground under its four wheels: a ray below each
+wheel finds its contact, the body follows the plane through them (pitch and roll), and each
+wheel rises or drops within a short suspension travel to touch its own contact. With no drive
+for half a second, or no link, it is commanded to stop.
 
-Tyres grip only so much: the vehicle never corners harder than the pack's
-`max_lateral_acceleration_m_s2`. Steered beyond it, the front wheels stay turned but the vehicle
-turns only as tight as the grip allows and runs wide (understeer); the yaw rate and the IMU it
-reports show that, as a real vehicle's would. There is no tyre slip model beyond this limit, no
-weight transfer and no suspension dynamics: a vehicle moved by its own forces is OVCS's TASK-81.
+How it turns is a dynamic bicycle model (`DynamicBicycle`), one axle at each end, about the
+centre of gravity: the vehicle can point elsewhere than it goes. Each axle's side force grows
+with its slip angle (the angle between where its wheels roll and where they go), at first by the
+pack's cornering stiffness, up to a peak of its load times the grip (the pack's
+`max_lateral_acceleration_m_s2` over g), then falls a little as the tyres slide (a simplified
+Pacejka curve, shape 1.3). Braking moves load onto the front axle and accelerating onto the rear
+(mass × acceleration × centre-of-gravity height / wheelbase), and an axle's stiffness and grip
+follow its load. The force an axle carries along the road, to change the speed or to hold it
+while sliding, takes its share of the grip (the friction circle): braking is shared by axle load,
+traction goes to the pack's `driven_axle`. Steady cornering never exceeds the grip. Taken gently,
+corners follow the kinematic path; past the grip the front axle runs wide (understeer), and
+braking or lifting off in a fast corner unloads the rear, which slides: the tail swings out, and
+held long enough the vehicle spins. Steering into the slide catches it. The model steps in
+substeps of at most 4 ms (and half its fastest time constant), and below 1 to 3 m/s it blends
+into the kinematic bicycle model about the rear axle, so parking and standing still are steady.
+Over a wall, the slide loses the share of speed the wall takes. The tyres pass on at most their
+grip along the road, whatever the speed command asks.
+
+The state OVCS reads is the origin's: the speed along the heading, the lateral velocity and yaw
+rate from the model, and what an IMU there reads, the model's lateral acceleration (plus the yaw
+acceleration's share at the origin) and gravity's reaction. The odometer counts the part of each
+move along the heading: what the wheels roll. There is no longitudinal tyre slip (the speed is
+OVCS's), no load transfer between left and right, no suspension dynamics and no aerodynamics; a
+vehicle moved by its own forces is OVCS's TASK-81.
 
 The vehicle does not pass through what it hits. Before every move its body box (raised off the
 ground so kerbs never reach it) is swept along the move; if the track's collision is in
