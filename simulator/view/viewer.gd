@@ -83,9 +83,18 @@ func _process(delta: float) -> void:
 		_camera.global_transform = ViewPoses.pose(view, placed, _vehicle.spec, _chase_heading)
 	if mirrors != null:
 		mirrors.live = ViewPoses.sees_mirrors(view) and not _looks_from_fixed_eye
-	_hud.text = (
-		"%3d km/h\n%s\n%s  |  %s view"
-		% [roundi(absf(_vehicle.speed_m_s) * 3.6), _link_status(), _title, view]
+	_hud.text = hud_text(
+		_vehicle.speed_m_s, _link_status(), _title, view, Engine.get_frames_per_second()
+	)
+
+
+static func hud_text(
+	speed_m_s: float, link_status: String, title: String, view_name: String, frames_per_s: float
+) -> String:
+	## The HUD's lines: speed and frame rate, how the vehicle is driven, what is shown.
+	return (
+		"%3d km/h   %d fps\n%s\n%s  |  %s view"
+		% [roundi(absf(speed_m_s) * 3.6), roundi(frames_per_s), link_status, title, view_name]
 	)
 
 
